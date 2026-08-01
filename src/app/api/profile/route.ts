@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       sql`SELECT section_id, viewed, guided_completed, guided_first_try, guided_steps, explained
           FROM section_progress WHERE profile_id = ${profile.id}`,
       sql`SELECT chapter, attempted, correct FROM practice_stats WHERE profile_id = ${profile.id}`,
-      sql`SELECT scope, score, total, seconds, breakdown, created_at
+      sql`SELECT scope, score, total, seconds, breakdown, client_id, created_at
           FROM exam_results WHERE profile_id = ${profile.id}
           ORDER BY created_at DESC LIMIT 25`,
     ]);

@@ -85,8 +85,18 @@ export function ensureSchema(): Promise<void> {
         total       INTEGER NOT NULL CHECK (total > 0),
         seconds     INTEGER,
         breakdown   JSONB,
+        client_id   TEXT,
         created_at  TIMESTAMPTZ DEFAULT now()
       )
+    `;
+    // Added after the first release, so existing tables need it too.
+    await sql`ALTER TABLE exam_results ADD COLUMN IF NOT EXISTS client_id TEXT`;
+    // The browser mints client_id for each attempt, which is what makes an exam
+    // write safe to repeat. Partial index so rows predating the column (with a
+    // NULL client_id) do not all collide with each other.
+    await sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_client
+        ON exam_results(profile_id, client_id) WHERE client_id IS NOT NULL
     `;
     await sql`CREATE INDEX IF NOT EXISTS idx_profiles_uuid    ON profiles(uuid)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_section_profile  ON section_progress(profile_id)`;
@@ -155,6 +165,42 @@ export function boundedInt(v: unknown, min: number, max: number): number | null 
   const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
   if (!Number.isFinite(n)) return null;
   return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+/**
+ * Like boundedInt, but rejects out-of-range values instead of clamping them.
+ *
+ * Use this for anything enum-like, where clamping invents meaning: chapter 99
+ * silently becoming chapter 6 writes a fact nobody stated.
+ */
+export function strictInt(v: unknown, min: number, max: number): number | null {
+  const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
+  if (!Number.isFinite(n)) return null;
+  const r = Math.round(n);
+  return r < min || r > max ? null : r;
+}
+
+/** A client-generated id used to make a repeated write idempotent. */
+export function cleanClientId(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim().slice(0, 64);
+  return /^[A-Za-z0-9._:-]{8,64}$/.test(s) ? s : null;
+}
+
+/**
+ * A timestamp supplied by a browser, for restoring history recorded offline.
+ *
+ * Rejected if unparseable, in the future, or absurdly old — a client should not
+ * be able to write history at an arbitrary point on the timeline.
+ */
+export function pastTimestamp(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = Date.parse(v);
+  if (!Number.isFinite(t)) return null;
+  const now = Date.now();
+  if (t > now + 60_000) return null;
+  if (t < now - 400 * 864e5) return null;
+  return new Date(t).toISOString();
 }
 
 /**

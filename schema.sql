@@ -60,6 +60,9 @@ CREATE TABLE IF NOT EXISTS practice_stats (
 -- JSON so it works for any exam scope without new columns.
 -- `total > 0` is enforced here as well as in the API, because every percentage
 -- on the dashboard divides by it.
+-- client_id is minted in the browser, one per attempt. It is what makes an
+-- exam write repeatable: a retry, or a later backfill of cached history,
+-- collapses onto the existing row instead of duplicating it.
 CREATE TABLE IF NOT EXISTS exam_results (
   id           SERIAL PRIMARY KEY,
   profile_id   INTEGER REFERENCES profiles(id) ON DELETE CASCADE,
@@ -68,8 +71,15 @@ CREATE TABLE IF NOT EXISTS exam_results (
   total        INTEGER NOT NULL CHECK (total > 0),
   seconds      INTEGER,
   breakdown    JSONB,
+  client_id    TEXT,
   created_at   TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE exam_results ADD COLUMN IF NOT EXISTS client_id TEXT;
+
+-- Partial, so rows written before client_id existed (all NULL) do not collide.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_client
+  ON exam_results(profile_id, client_id) WHERE client_id IS NOT NULL;
 
 -- ------------------------------------------------------------------ indexes
 CREATE INDEX IF NOT EXISTS idx_profiles_uuid       ON profiles(uuid);

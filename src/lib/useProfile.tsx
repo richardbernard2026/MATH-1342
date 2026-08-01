@@ -32,6 +32,9 @@ export type ExamResult = {
   total: number;
   seconds: number | null;
   breakdown: Record<string, { correct: number; total: number }> | null;
+  /** Minted in the browser per attempt. Absent on rows written before this
+   *  field existed, which is why it is optional. */
+  client_id?: string | null;
   created_at: string;
 };
 
@@ -60,18 +63,25 @@ type ProfileState = {
 const UUID_KEY = "statlab_uuid";
 const CACHE_KEY = "statlab_profile_v1";
 
+function randomId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/** A per-attempt id, used to make a repeated write a no-op. */
+function newClientId(): string {
+  return randomId();
+}
+
 function getUuid(): string {
   if (typeof window === "undefined") return "";
   let id = window.localStorage.getItem(UUID_KEY);
   if (!id) {
-    id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-            const r = (Math.random() * 16) | 0;
-            const v = c === "x" ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
-          });
+    id = randomId();
     window.localStorage.setItem(UUID_KEY, id);
   }
   return id;
@@ -135,25 +145,126 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [practice, setPractice] = useState<PracticeStat[]>([]);
   const [exams, setExams] = useState<ExamResult[]>([]);
 
-  /**
-   * Writes made before the profile exists.
-   *
-   * The server drops progress for an unknown uuid, which is correct — there is
-   * no row to attach it to. But someone can land straight on a lesson URL and
-   * start working before they have typed a name, so those events are held here
-   * and replayed the moment the profile is created.
-   */
-  const pending = useRef<Record<string, unknown>[]>([]);
   const hasProfile = useRef(false);
 
+  /**
+   * Reconcile this browser's cached progress with the database.
+   *
+   * Runs whenever a profile row becomes available: on a normal load, when a
+   * name is first entered, and when a lost row is recreated. Reads localStorage
+   * directly rather than React state so it does not depend on a re-render
+   * having happened first.
+   *
+   * There is deliberately no second mechanism. An earlier version also queued
+   * individual events in memory and replayed them here, which meant the same
+   * practice attempt could be counted once by the replay and again by this
+   * reconcile. The cache is a strict superset of anything such a queue would
+   * hold, so this alone is sufficient — and because every statement behind it
+   * is idempotent, running it more often than strictly necessary is harmless.
+   */
+  const backfill = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    let cache: {
+      sections?: SectionProgress[];
+      practice?: PracticeStat[];
+      exams?: ExamResult[];
+    } | null = null;
+    try {
+      const raw = window.localStorage.getItem(CACHE_KEY);
+      if (raw) cache = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (!cache) return;
+
+    const sections = (cache.sections ?? []).map((s) => ({
+      sectionId: s.section_id,
+      viewed: s.viewed,
+      guidedCompleted: s.guided_completed,
+      guidedFirstTry: s.guided_first_try,
+      guidedSteps: s.guided_steps,
+      explained: s.explained,
+    }));
+    const practice = cache.practice ?? [];
+    // Exams without a client_id predate that field and cannot be deduplicated,
+    // so the server will skip them. Filter here too, to keep the payload small.
+    const exams = (cache.exams ?? [])
+      .filter((e) => e.client_id)
+      .map((e) => ({
+        clientId: e.client_id,
+        scope: e.scope,
+        score: e.score,
+        total: e.total,
+        seconds: e.seconds,
+        breakdown: e.breakdown,
+        createdAt: e.created_at,
+      }));
+
+    if (!sections.length && !practice.length && !exams.length) return;
+
+    fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uuid: getUuid(), kind: "backfill", sections, practice, exams }),
+    }).catch(() => {});
+  }, []);
+
+  /**
+   * Talk to /api/profile and apply whatever comes back.
+   *
+   * Passing a name creates the row or renames it; passing nothing just loads.
+   * Returns the parsed response so the caller can decide what to do when the
+   * server turns out to have no profile for this browser.
+   */
+  const syncProfile = useCallback(
+    async (name?: string) => {
+      const uuid = getUuid();
+      const body: Record<string, unknown> = { uuid };
+      if (name) body.firstName = name;
+
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => null);
+
+      if (d?.ok && d.profile) {
+        hasProfile.current = true;
+        setFirstName(d.profile.firstName);
+        // Merge, never replace: local may hold writes the server has not seen.
+        setSections((local) => mergeSections(local, d.sections ?? []));
+        setPractice((local) => mergePractice(local, d.practice ?? []));
+        // Exam rows are append-only and the server holds the full history.
+        if (Array.isArray(d.exams) && d.exams.length) setExams(d.exams);
+        // Push up anything this browser has that the server does not. Safe to
+        // run on every load: every write behind it is idempotent.
+        backfill();
+      }
+      return d;
+    },
+    [backfill]
+  );
+
   // Load the local cache immediately so the UI never flashes empty.
+  const bootstrapped = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // React 18 StrictMode invokes effects twice in development, and a remount
+    // would do the same in production. One bootstrap per provider instance.
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+
+    let cachedName: string | null = null;
     try {
       const raw = window.localStorage.getItem(CACHE_KEY);
       if (raw) {
         const c = JSON.parse(raw);
-        if (c.firstName) setFirstName(c.firstName);
+        if (c.firstName) {
+          cachedName = c.firstName;
+          setFirstName(c.firstName);
+        }
         if (Array.isArray(c.sections)) setSections(c.sections);
         if (Array.isArray(c.practice)) setPractice(c.practice);
         if (Array.isArray(c.exams)) setExams(c.exams);
@@ -163,45 +274,27 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Then reconcile with the server.
-    const uuid = getUuid();
-    fetch("/api/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uuid }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
+    syncProfile()
       .then((d) => {
-        if (d?.ok && d.profile) {
-          hasProfile.current = true;
-          setFirstName(d.profile.firstName);
-          // Merge, never replace: local may hold writes the server has not seen.
-          setSections((local) => mergeSections(local, d.sections ?? []));
-          setPractice((local) => mergePractice(local, d.practice ?? []));
-          // Exam rows are append-only and the server holds the full history.
-          if (Array.isArray(d.exams) && d.exams.length) setExams(d.exams);
-          flush();
+        // This browser thinks it has a name but the database has no row for it.
+        // That happens when the name was entered while the database was down,
+        // or if the tables were wiped. Left alone the name would stay stranded
+        // in localStorage forever: the greeting works, nothing is ever saved,
+        // and the person never appears on the admin page.
+        //
+        // `synced` is what distinguishes "the database is fine and genuinely
+        // has no row for you" from "the database could not be reached". Only
+        // the first is worth acting on; retrying into an unreachable database
+        // would just fail again. If /api/profile ever stops returning that
+        // flag on its error path, this recovery silently stops working.
+        if (d?.ok && d.synced && !d.profile && cachedName) {
+          // syncProfile backfills on success, so nothing more is needed here.
+          return syncProfile(cachedName).then(() => undefined);
         }
       })
       .catch(() => {})
       .finally(() => setReady(true));
-    // `flush` is defined below and is stable; this effect runs once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /** Replay anything recorded before the profile existed. */
-  const flush = useCallback(() => {
-    if (!hasProfile.current || pending.current.length === 0) return;
-    const queued = pending.current;
-    pending.current = [];
-    const uuid = getUuid();
-    for (const body of queued) {
-      fetch("/api/progress", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uuid, ...body }),
-      }).catch(() => {});
-    }
-  }, []);
+  }, [syncProfile]);
 
   // Persist the cache whenever anything changes.
   useEffect(() => {
@@ -217,12 +310,10 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   }, [ready, firstName, sections, practice, exams]);
 
   const post = useCallback((body: Record<string, unknown>) => {
-    // Until the profile row exists the server has nothing to attach this to,
-    // so hold it rather than firing a write that would be silently discarded.
-    if (!hasProfile.current) {
-      if (pending.current.length < 200) pending.current.push(body);
-      return;
-    }
+    // Without a profile row the server has nothing to attach this to, so skip
+    // the request. The event is already in React state, which persists to the
+    // cache, and `backfill` will carry it up as soon as a profile exists.
+    if (!hasProfile.current) return;
     fetch("/api/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -232,24 +323,16 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   const setName = useCallback(
     async (name: string) => {
-      const uuid = getUuid();
+      // Show it straight away; the sync can catch up on its own.
       setFirstName(name);
       try {
-        const res = await fetch("/api/profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uuid, firstName: name }),
-        });
-        const d = await res.json().catch(() => null);
-        if (d?.ok && d.profile) {
-          hasProfile.current = true;
-          flush();
-        }
+        await syncProfile(name);
       } catch {
-        /* keep the local name even if the sync fails */
+        /* keep the local name even if the sync fails — the next page load
+           will notice the row is missing and create it */
       }
     },
-    [flush]
+    [syncProfile]
   );
 
   const recordSection: ProfileState["recordSection"] = useCallback(
@@ -291,6 +374,12 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   const recordExam: ProfileState["recordExam"] = useCallback(
     (scope, score, total, seconds, breakdown) => {
+      // One id per attempt, minted here. It is what lets the server tell a
+      // retry or a later backfill apart from a genuinely new attempt, so an
+      // exam can never be written twice.
+      const clientId = newClientId();
+      const createdAt = new Date().toISOString();
+
       setExams((prev) =>
         [
           {
@@ -299,12 +388,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
             total,
             seconds,
             breakdown: breakdown as any,
-            created_at: new Date().toISOString(),
+            client_id: clientId,
+            created_at: createdAt,
           },
           ...prev,
         ].slice(0, 25)
       );
-      post({ kind: "exam", scope, score, total, seconds, breakdown });
+      post({ kind: "exam", clientId, scope, score, total, seconds, breakdown });
     },
     [post]
   );
@@ -315,7 +405,6 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.removeItem(UUID_KEY);
     window.localStorage.removeItem("statlab_srs_v1");
     hasProfile.current = false;
-    pending.current = [];
     setFirstName(null);
     setSections([]);
     setPractice([]);
