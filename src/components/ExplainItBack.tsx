@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, PrimaryButton, GhostButton } from "@/components/kit";
 import { MathText } from "@/components/MathText";
 import { PencilSimpleLine, ArrowCounterClockwise } from "@phosphor-icons/react/dist/ssr";
+import { useProfile } from "@/lib/useProfile";
 
 /**
  * Explain it back.
@@ -22,6 +23,7 @@ export function ExplainItBack({ sectionId, title }: { sectionId: string; title: 
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const { recordSection } = useProfile();
 
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
 
@@ -30,6 +32,7 @@ export function ExplainItBack({ sectionId, title }: { sectionId: string; title: 
     setBusy(true);
     setSubmitted(true);
     setFeedback("");
+    recordSection(sectionId, { explained: true });
 
     try {
       const res = await fetch("/api/tutor", {

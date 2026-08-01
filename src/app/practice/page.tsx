@@ -6,8 +6,10 @@ import { CheckCircle, XCircle, ListNumbers, ArrowsClockwise } from "@phosphor-ic
 import { Card, Badge, PageHeader, PrimaryButton, GhostButton, chipActive } from "@/components/kit";
 import { MathText } from "@/components/MathText";
 import { generateProblem, topicsByChapter, type PracticeProblem } from "@/lib/practiceGenerators";
+import { useProfile } from "@/lib/useProfile";
 
 function PracticeInner() {
+  const { recordPractice } = useProfile();
   const params = useSearchParams();
   const initialCh = (() => {
     const raw = Number(params.get("ch"));
@@ -36,6 +38,19 @@ function PracticeInner() {
     if (p.kind === "numeric") requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
+  // Keep the selected chapter in step with ?ch=. Navigating from /practice?ch=2
+  // to /practice?ch=5 is a same-route transition, so this component does not
+  // remount and the initial useState value would otherwise go stale — leaving
+  // attempts recorded against the wrong chapter.
+  const chParam = params.get("ch");
+  useEffect(() => {
+    const n = Number(chParam);
+    if (n >= 1 && n <= 6) {
+      setChapter(n);
+      setTopicKey(undefined);
+    }
+  }, [chParam]);
+
   useEffect(() => {
     nextProblem(chapter, topicKey);
   }, [chapter, topicKey, nextProblem]);
@@ -43,6 +58,7 @@ function PracticeInner() {
   function grade(ok: boolean) {
     setFeedback(ok ? "correct" : "incorrect");
     setAttempted((n) => n + 1);
+    recordPractice(chapter, ok);
     if (ok) {
       setCorrect((n) => n + 1);
       setStreak((s) => s + 1);

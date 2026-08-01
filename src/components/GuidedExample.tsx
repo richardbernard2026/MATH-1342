@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, Lightbulb, ArrowRight, ArrowCounterClockwise } fr
 import { Card, PrimaryButton, GhostButton } from "@/components/kit";
 import { MathText } from "@/components/MathText";
 import type { GuidedExample as GE } from "@/lib/data/guidedExamples";
+import { useProfile } from "@/lib/useProfile";
 
 /**
  * Work a problem together, one step at a time.
@@ -26,6 +27,7 @@ type StepState = {
 };
 
 export function GuidedExample({ example }: { example: GE }) {
+  const { recordSection } = useProfile();
   const [current, setCurrent] = useState(0);
   const [value, setValue] = useState("");
   const [states, setStates] = useState<StepState[]>(
@@ -40,6 +42,18 @@ export function GuidedExample({ example }: { example: GE }) {
     setStates((prev) => prev.map((s, k) => (k === i ? { ...s, ...patch } : s)));
   }
 
+  /**
+   * Increment the attempt count from the previous state rather than from the
+   * rendered copy. Reading `state.attempts` in the closure means two grades
+   * dispatched in the same batch compute the same number, so an answer that
+   * took two tries could still be credited as first-try.
+   */
+  function bumpAttempts(i: number, patch: Partial<StepState>) {
+    setStates((prev) =>
+      prev.map((s, k) => (k === i ? { ...s, ...patch, attempts: s.attempts + 1 } : s))
+    );
+  }
+
   function grade(raw: string, choiceIndex?: number) {
     if (!step || state.status === "correct") return;
 
@@ -52,9 +66,8 @@ export function GuidedExample({ example }: { example: GE }) {
       ok = !Number.isNaN(v) && Math.abs(v - step.answer) <= tol;
     }
 
-    update(current, {
+    bumpAttempts(current, {
       status: ok ? "correct" : "incorrect",
-      attempts: state.attempts + 1,
       given: step.kind === "choice" ? String(choiceIndex) : raw,
     });
   }
@@ -62,6 +75,14 @@ export function GuidedExample({ example }: { example: GE }) {
   function next() {
     if (current + 1 >= example.steps.length) {
       setDone(true);
+      // Record the outcome once, at the moment the last step is cleared.
+      recordSection(example.sectionId, {
+        guidedCompleted: true,
+        guidedFirstTry: states.filter(
+          (s) => s.status === "correct" && s.attempts === 1 && !s.usedHint
+        ).length,
+        guidedSteps: example.steps.length,
+      });
       return;
     }
     setCurrent((c) => c + 1);
@@ -93,7 +114,9 @@ export function GuidedExample({ example }: { example: GE }) {
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-panel2">
           <div
             className="h-full rounded-full bg-good transition-all duration-300"
-            style={{ width: `${(solved / example.steps.length) * 100}%` }}
+            style={{
+              width: `${example.steps.length ? (solved / example.steps.length) * 100 : 0}%`,
+            }}
           />
         </div>
         <span className="shrink-0 text-xs text-[#9aa1b2]">

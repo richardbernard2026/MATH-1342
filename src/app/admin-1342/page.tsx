@@ -1,37 +1,63 @@
 "use client";
 
 import { useState } from "react";
-import { Card, PageHeader, PrimaryButton } from "@/components/kit";
+import { Card, PageHeader, PrimaryButton, barFill } from "@/components/kit";
 import { Lock } from "@phosphor-icons/react/dist/ssr";
 
 /**
  * Admin dashboard at /admin-1342.
  *
- * Two things are different from the old static version:
+ * No XSS is possible here: every value is rendered as a React child, and React
+ * escapes text by default. The earlier version of this page built table rows by
+ * concatenating strings into innerHTML, which meant anyone could POST a payload
+ * like `<img src=x onerror=...>` to the public tracking endpoint and have it run
+ * in this browser with the passphrase sitting in the DOM. That whole class of
+ * bug is now structurally impossible, and the API additionally restricts every
+ * identifier to a fixed allowlist.
  *
- * 1. NO XSS. Every value is rendered as a React child, and React escapes text
- *    by default. The old page built table rows with string concatenation into
- *    innerHTML, which meant anyone could POST a payload like
- *    `<img src=x onerror=...>` to the public tracking endpoint and have it run
- *    here, in this browser, with the passphrase sitting in the DOM. That entire
- *    class of bug is now structurally impossible, and the API additionally
- *    restricts page and test names to a fixed allowlist.
- *
- * 2. The passphrase is cleared from memory the moment it is accepted, so it is
- *    not left sitting in a form field for the rest of the session.
+ * The passphrase is cleared the moment it is accepted, so it is not left sitting
+ * in a form field for the rest of the session.
  */
 
-type Row = Record<string, any>;
+type Person = {
+  id: number;
+  first_name: string;
+  created_at: string;
+  last_seen: string | null;
+  sections_viewed: number;
+  guided_done: number;
+  practice_attempted: number;
+  practice_correct: number;
+  exams_taken: number;
+};
+
+type Exam = {
+  id: number;
+  scope: string;
+  score: number;
+  total: number;
+  seconds: number | null;
+  created_at: string;
+  first_name: string;
+};
+
+type ChapterStat = { chapter: number; attempted: number; correct: number };
+
+const SCOPE_LABEL: Record<string, string> = {
+  t1: "Test 1 (Ch 1-3)",
+  t2: "Test 2 (Ch 4-6)",
+  cum: "Cumulative",
+};
 
 export default function AdminPage() {
   const [secret, setSecret] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "ready">("idle");
   const [message, setMessage] = useState("");
   const [data, setData] = useState<{
-    visitorCount?: number;
-    results: Row[];
-    visits: Row[];
     dbConfigured?: boolean;
+    people: Person[];
+    exams: Exam[];
+    chapters: ChapterStat[];
   } | null>(null);
 
   async function load() {
@@ -54,10 +80,10 @@ export default function AdminPage() {
       }
 
       setData({
-        visitorCount: json.visitorCount,
-        results: json.results ?? [],
-        visits: json.visits ?? [],
         dbConfigured: json.dbConfigured,
+        people: json.people ?? [],
+        exams: json.exams ?? [],
+        chapters: json.chapters ?? [],
       });
       setStatus("ready");
       // Do not keep the passphrase around after it has been used.
@@ -74,7 +100,7 @@ export default function AdminPage() {
         <Card className="text-center">
           <Lock size={30} weight="duotone" className="mx-auto mb-3 text-[#9aa1b2]" />
           <h1 className="text-lg font-bold">Admin</h1>
-          <p className="mt-1 text-sm text-[#9aa1b2]">Enter the passphrase to view usage data.</p>
+          <p className="mt-1 text-sm text-[#9aa1b2]">Enter the passphrase to view study data.</p>
 
           <input
             type="password"
@@ -101,52 +127,117 @@ export default function AdminPage() {
     );
   }
 
+  const people = data?.people ?? [];
+  const exams = data?.exams ?? [];
+  const chapters = data?.chapters ?? [];
+
+  const avgExam = exams.length
+    ? Math.round(
+        (exams.reduce((a, e) => a + (e.total ? e.score / e.total : 0), 0) / exams.length) * 100
+      )
+    : 0;
+  const activeThisWeek = people.filter(
+    (p) => p.last_seen && Date.now() - new Date(p.last_seen).getTime() < 7 * 864e5
+  ).length;
+
   return (
     <div className="fadein">
       <PageHeader
-        title="Usage"
-        sub="Anonymous study activity. No names, emails, or IP addresses are stored."
+        title="Study data"
+        sub="First names and study activity for everyone using the site. No emails, passwords, IP addresses, or device identifiers are stored."
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="p-4 text-center">
-          <div className="text-2xl font-bold">{data?.visitorCount ?? 0}</div>
-          <div className="mt-1 text-xs text-[#9aa1b2]">Visitors</div>
-        </Card>
-        <Card className="p-4 text-center">
-          <div className="text-2xl font-bold">{data?.results.length ?? 0}</div>
-          <div className="mt-1 text-xs text-[#9aa1b2]">Tests taken</div>
-        </Card>
-        <Card className="p-4 text-center">
-          <div className="text-2xl font-bold">{data?.visits.length ?? 0}</div>
-          <div className="mt-1 text-xs text-[#9aa1b2]">Page visits</div>
-        </Card>
-        <Card className="p-4 text-center">
-          <div className="text-2xl font-bold">
-            {data && data.results.length
-              ? Math.round(
-                  (data.results.reduce(
-                    (a, r) => a + (r.mock_total ? r.mock_score / r.mock_total : 0),
-                    0
-                  ) /
-                    data.results.length) *
-                    100
-                )
-              : 0}
-            %
-          </div>
-          <div className="mt-1 text-xs text-[#9aa1b2]">Average score</div>
-        </Card>
+        <Stat value={people.length} label="Students" />
+        <Stat value={activeThisWeek} label="Active this week" />
+        <Stat value={exams.length} label="Mock exams taken" />
+        <Stat value={`${avgExam}%`} label="Average exam score" />
       </div>
 
+      {chapters.length > 0 && (
+        <Card className="mb-4">
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#9aa1b2]">
+            Class practice accuracy by chapter
+          </h2>
+          <div className="space-y-3">
+            {chapters.map((c) => {
+              const pct = c.attempted ? Math.round((c.correct / c.attempted) * 100) : 0;
+              return (
+                <div key={c.chapter}>
+                  <div className="mb-1 flex justify-between text-xs">
+                    <span className="font-semibold">Chapter {c.chapter}</span>
+                    <span className="text-[#9aa1b2]">
+                      {pct}% of {c.attempted}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-panel2">
+                    <div
+                      className={`h-full rounded-full ${barFill[c.chapter] || "bg-ch4"}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       <Card className="mb-4 overflow-x-auto">
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#9aa1b2]">
-          Recent tests
-        </h2>
-        {data && data.results.length > 0 ? (
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#9aa1b2]">Students</h2>
+        {people.length > 0 ? (
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-[#9aa1b2]">
               <tr>
+                <th className="pb-2 pr-4">Name</th>
+                <th className="pb-2 pr-4">Sections</th>
+                <th className="pb-2 pr-4">Worked</th>
+                <th className="pb-2 pr-4">Practice</th>
+                <th className="pb-2 pr-4">Exams</th>
+                <th className="pb-2">Last seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {people.map((p) => {
+                const acc = p.practice_attempted
+                  ? Math.round((p.practice_correct / p.practice_attempted) * 100)
+                  : null;
+                return (
+                  <tr key={p.id} className="border-t border-border">
+                    {/* React escapes these values automatically */}
+                    <td className="py-2 pr-4 font-semibold">{p.first_name}</td>
+                    <td className="py-2 pr-4 font-mono">{p.sections_viewed}/18</td>
+                    <td className="py-2 pr-4 font-mono">{p.guided_done}</td>
+                    <td className="py-2 pr-4 font-mono">
+                      {acc === null ? "-" : `${acc}% of ${p.practice_attempted}`}
+                    </td>
+                    <td className="py-2 pr-4 font-mono">{p.exams_taken}</td>
+                    <td className="py-2 text-[#9aa1b2]">
+                      {p.last_seen ? new Date(p.last_seen).toLocaleDateString() : "-"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-[#9aa1b2]">
+            {data?.dbConfigured === false
+              ? "No database is configured, so nothing is being recorded."
+              : "Nobody has entered a name yet."}
+          </p>
+        )}
+      </Card>
+
+      <Card className="overflow-x-auto">
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#9aa1b2]">
+          Recent mock exams
+        </h2>
+        {exams.length > 0 ? (
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase tracking-wide text-[#9aa1b2]">
+              <tr>
+                <th className="pb-2 pr-4">Who</th>
                 <th className="pb-2 pr-4">Test</th>
                 <th className="pb-2 pr-4">Score</th>
                 <th className="pb-2 pr-4">Time</th>
@@ -154,57 +245,36 @@ export default function AdminPage() {
               </tr>
             </thead>
             <tbody>
-              {data.results.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  {/* React escapes these values automatically */}
-                  <td className="py-2 pr-4">{r.test}</td>
+              {exams.map((e) => (
+                <tr key={e.id} className="border-t border-border">
+                  <td className="py-2 pr-4 font-semibold">{e.first_name}</td>
+                  <td className="py-2 pr-4">{SCOPE_LABEL[e.scope] ?? e.scope}</td>
                   <td className="py-2 pr-4 font-mono">
-                    {r.mock_score}/{r.mock_total}
+                    {e.score}/{e.total}
                   </td>
                   <td className="py-2 pr-4 font-mono">
-                    {r.mock_time_seconds != null ? `${Math.round(r.mock_time_seconds / 60)}m` : "-"}
+                    {e.seconds != null ? `${Math.round(e.seconds / 60)}m` : "-"}
                   </td>
                   <td className="py-2 text-[#9aa1b2]">
-                    {r.created_at ? new Date(r.created_at).toLocaleString() : "-"}
+                    {e.created_at ? new Date(e.created_at).toLocaleString() : "-"}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
-          <p className="text-sm text-[#9aa1b2]">No test results recorded yet.</p>
-        )}
-      </Card>
-
-      <Card className="overflow-x-auto">
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-[#9aa1b2]">
-          Recent page visits
-        </h2>
-        {data && data.visits.length > 0 ? (
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase tracking-wide text-[#9aa1b2]">
-              <tr>
-                <th className="pb-2 pr-4">Page</th>
-                <th className="pb-2 pr-4">Seconds</th>
-                <th className="pb-2">When</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.visits.map((v) => (
-                <tr key={v.id} className="border-t border-border">
-                  <td className="py-2 pr-4">{v.page}</td>
-                  <td className="py-2 pr-4 font-mono">{v.seconds}</td>
-                  <td className="py-2 text-[#9aa1b2]">
-                    {v.created_at ? new Date(v.created_at).toLocaleString() : "-"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-sm text-[#9aa1b2]">No page visits recorded yet.</p>
+          <p className="text-sm text-[#9aa1b2]">No mock exams recorded yet.</p>
         )}
       </Card>
     </div>
+  );
+}
+
+function Stat({ value, label }: { value: React.ReactNode; label: string }) {
+  return (
+    <Card className="p-4 text-center">
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="mt-1 text-xs text-[#9aa1b2]">{label}</div>
+    </Card>
   );
 }

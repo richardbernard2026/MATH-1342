@@ -1,4 +1,4 @@
-import { sql, dbConfigured, safeEqual } from "@/lib/db";
+import { sql, dbConfigured, safeEqual, rateLimited, clientIp } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,32 +7,15 @@ export const dynamic = "force-dynamic";
  * Admin data endpoint.
  *
  * Authentication is a shared passphrase checked SERVER-SIDE, which is the part
- * that actually matters. The dashboard's URL is not a secret and was never
- * doing any real work; it is now simply /admin-1342.
+ * that actually matters. The dashboard's URL is not a secret and was never doing
+ * any real work; it is simply /admin-1342.
  *
  * Fails closed: if ADMIN_SECRET is not set, nothing is ever returned.
+ *
+ * On what this returns: profiles now carry a first name, so this is personal
+ * data about real classmates rather than anonymous counters. It stays read-only,
+ * capped in size, and never includes IP addresses or device identifiers.
  */
-
-/**
- * Crude in-memory throttle. Serverless instances are recycled, so this is not
- * airtight, but it removes the ability to fire thousands of guesses a minute at
- * a single warm instance. The real defence is a long random ADMIN_SECRET.
- */
-const attempts = new Map<string, { count: number; first: number }>();
-const WINDOW_MS = 60_000;
-const MAX_ATTEMPTS = 8;
-
-function rateLimited(key: string): boolean {
-  const now = Date.now();
-  const rec = attempts.get(key);
-  if (!rec || now - rec.first > WINDOW_MS) {
-    attempts.set(key, { count: 1, first: now });
-    return false;
-  }
-  rec.count += 1;
-  return rec.count > MAX_ATTEMPTS;
-}
-
 export async function POST(req: Request) {
   try {
     const expected = process.env.ADMIN_SECRET;
@@ -43,9 +26,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    if (rateLimited(ip)) {
+    // Two buckets: one per address, and one global. The per-address bucket is
+    // the useful signal; the global one means that even if someone rotates
+    // addresses (or spoofs a forwarded header) they cannot turn this instance
+    // into a fast guessing oracle.
+    const ip = clientIp(req);
+    if (rateLimited(`admin:${ip}`, 8, 60_000) || rateLimited("admin:*", 30, 60_000)) {
       return Response.json(
         { ok: false, error: "Too many attempts. Wait a minute and try again." },
         { status: 429 }
@@ -60,32 +46,56 @@ export async function POST(req: Request) {
     }
 
     if (!dbConfigured || !sql) {
-      return Response.json({ ok: true, results: [], visits: [], dbConfigured: false });
+      return Response.json({ ok: true, dbConfigured: false, people: [], exams: [], chapters: [] });
     }
 
-    const results = await sql`
-      SELECT r.id, r.test, r.mock_score, r.mock_total, r.mock_time_seconds, r.created_at
-      FROM results r
-      ORDER BY r.created_at DESC
-      LIMIT 500
+    // One row per student, with their progress rolled up.
+    const people = await sql`
+      SELECT
+        p.id,
+        p.first_name,
+        p.created_at,
+        p.last_seen,
+        COALESCE(sp.viewed, 0)::int    AS sections_viewed,
+        COALESCE(sp.guided, 0)::int    AS guided_done,
+        COALESCE(ps.attempted, 0)::int AS practice_attempted,
+        COALESCE(ps.correct, 0)::int   AS practice_correct,
+        COALESCE(ex.n, 0)::int         AS exams_taken
+      FROM profiles p
+      LEFT JOIN (
+        SELECT profile_id,
+               COUNT(*) FILTER (WHERE viewed)           AS viewed,
+               COUNT(*) FILTER (WHERE guided_completed) AS guided
+        FROM section_progress GROUP BY profile_id
+      ) sp ON sp.profile_id = p.id
+      LEFT JOIN (
+        SELECT profile_id, SUM(attempted) AS attempted, SUM(correct) AS correct
+        FROM practice_stats GROUP BY profile_id
+      ) ps ON ps.profile_id = p.id
+      LEFT JOIN (
+        SELECT profile_id, COUNT(*) AS n FROM exam_results GROUP BY profile_id
+      ) ex ON ex.profile_id = p.id
+      ORDER BY p.last_seen DESC NULLS LAST
+      LIMIT 300
     `;
 
-    const visits = await sql`
-      SELECT p.id, p.page, p.seconds, p.created_at
-      FROM page_visits p
-      ORDER BY p.created_at DESC
-      LIMIT 500
+    const exams = await sql`
+      SELECT e.id, e.scope, e.score, e.total, e.seconds, e.created_at, p.first_name
+      FROM exam_results e
+      JOIN profiles p ON p.id = e.profile_id
+      ORDER BY e.created_at DESC
+      LIMIT 300
     `;
 
-    const totals = await sql`SELECT COUNT(*)::int AS n FROM visitors`;
+    // Where the class as a whole struggles, from aggregate practice accuracy.
+    const chapters = await sql`
+      SELECT chapter, SUM(attempted)::int AS attempted, SUM(correct)::int AS correct
+      FROM practice_stats
+      GROUP BY chapter
+      ORDER BY chapter
+    `;
 
-    return Response.json({
-      ok: true,
-      dbConfigured: true,
-      visitorCount: totals[0]?.n ?? 0,
-      results,
-      visits,
-    });
+    return Response.json({ ok: true, dbConfigured: true, people, exams, chapters });
   } catch {
     // Deliberately vague: does not name env vars or the hosting provider.
     return Response.json({ ok: false, error: "Server error." }, { status: 500 });

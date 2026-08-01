@@ -37,8 +37,10 @@ All three are optional. Everything except the tutor works with none of them set.
 | Variable | Purpose | If missing |
 |---|---|---|
 | `GROQ_API_KEY` | AI tutor and explain-it-back | Tutor shows a friendly "not connected" message |
-| `DATABASE_URL` | Neon Postgres for usage tracking | Tracking silently no-ops |
+| `DATABASE_URL` | Neon Postgres for profiles and progress | Progress stays in the browser only |
 | `ADMIN_SECRET` | Passphrase for `/admin-1342` | Admin returns "not configured" |
+
+Before `DATABASE_URL` does anything useful, run `schema.sql` in the Neon SQL editor at console.neon.tech. The Query browser embedded in Vercel is read-only and will reject `CREATE TABLE`.
 
 For local development, copy `.env.example` to `.env.local` and fill it in. `.env.local` is gitignored and must never be committed.
 
@@ -84,12 +86,16 @@ src/
     test-review/                 timed mock exams
     flashcards/                  spaced repetition
     tutor/                       AI tutor chat
-    admin-1342/                  usage dashboard (passphrase protected)
+    admin-1342/                  study-data dashboard (passphrase protected)
     api/
       tutor/                     streaming Groq chat, scoped per section
-      track/  result/  admin/    usage tracking and dashboard data
+      profile/                   create/load a study profile
+      progress/                  record sections, practice, exams
+      admin/                     dashboard data
   components/
     kit.tsx                      shared UI, navbar, chapter colours
+    fx.tsx                       spotlight cards, progress rings, sparkline
+    NameGate.tsx                 first-visit name prompt
     MathText.tsx                 the single KaTeX renderer used everywhere
     Diagram.tsx                  17 hand-built SVG diagrams
     GuidedExample.tsx            step-by-step problem walkthrough
@@ -114,10 +120,25 @@ src/
 
 - Secrets are read from the server environment only and never reach the browser
 - The admin dashboard renders all values through React, which escapes by default; the previous static version concatenated strings into `innerHTML` and was vulnerable to stored XSS
-- Tracking endpoints validate UUIDs properly and restrict page and test names to a fixed allowlist
-- The admin endpoint rate-limits attempts and compares the passphrase in constant time
+- Progress endpoints validate UUIDs properly and restrict section ids and exam scopes to a fixed allowlist
+- Cross-origin writes are rejected by exact host match, not a suffix check
+- The admin endpoint rate-limits per address and globally, and compares the passphrase in constant time over fixed-width hashes
 - All database queries use parameterized tagged templates
 
 ## Privacy
 
-If you share this with classmates, tell them directly rather than relying on a footer. A random ID in their browser links their quiz attempts together across the semester. That's pseudonymous, not anonymous — in a small class, timestamps and scores can identify someone. No names, emails, or IP addresses are stored.
+**This stores real names.** On first visit the site asks for a first name and saves it, along with every section opened, every practice answer, and every mock exam score. All of it is visible to whoever holds the `ADMIN_SECRET` at `/admin-1342`.
+
+That makes this personal data, not anonymous analytics. If you share the link with classmates, tell them directly — the notice on the name prompt is honest, but a person deserves to hear it from you rather than read it in a modal. What is *not* collected: emails, passwords, IP addresses, and anything that identifies a device.
+
+To delete one person's data entirely:
+
+```sql
+DELETE FROM profiles WHERE first_name = 'Name';
+```
+
+Every other table cascades from that. To wipe everything at the end of the semester:
+
+```sql
+TRUNCATE profiles CASCADE;
+```

@@ -7,6 +7,7 @@ import { MathText } from "@/components/MathText";
 import { testBank, type Question } from "@/lib/data/testBank";
 import { examScopes } from "@/lib/data/chapters";
 import { shuffle } from "@/lib/math";
+import { useProfile } from "@/lib/useProfile";
 
 type Phase = "intro" | "running" | "results";
 type Answered = { question: Question; correct: boolean };
@@ -18,6 +19,7 @@ function formatTime(total: number) {
 }
 
 export default function TestReviewPage() {
+  const { recordExam } = useProfile();
   const [phase, setPhase] = useState<Phase>("intro");
   const [scope, setScope] = useState(examScopes[1]);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -30,6 +32,7 @@ export default function TestReviewPage() {
   const [finalTime, setFinalTime] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const numRef = useRef<HTMLInputElement>(null);
+  const submittedRef = useRef(false);
 
   useEffect(() => {
     if (phase === "running") timer.current = setInterval(() => setSeconds((s) => s + 1), 1000);
@@ -43,8 +46,14 @@ export default function TestReviewPage() {
   }, [phase, index, questions, locked]);
 
   function start(s = scope) {
+    const pool = shuffle(testBank.filter((q) => s.chapters.includes(q.ch)));
+    // Never enter the running phase with nothing to show: the question lookup
+    // would be undefined and the screen would go blank with no way back.
+    if (pool.length === 0) return;
+
     setScope(s);
-    setQuestions(shuffle(testBank.filter((q) => s.chapters.includes(q.ch))));
+    setQuestions(pool);
+    submittedRef.current = false;
     setIndex(0);
     setAnswers([]);
     setPicked(null);
@@ -77,8 +86,17 @@ export default function TestReviewPage() {
 
   function goNext() {
     if (index + 1 >= questions.length) {
+      // `setPhase` only takes effect on the next render, so a double click can
+      // run this branch twice and insert two rows for one exam. The ref flips
+      // synchronously and blocks the second one.
+      if (submittedRef.current) return;
+      submittedRef.current = true;
+
       setFinalTime(seconds);
       setPhase("results");
+      // `answers` already holds every response: the last one was recorded when
+      // the question was locked, which re-rendered before this click.
+      recordExam(scope.key, score, questions.length, seconds, breakdown);
       return;
     }
     setIndex((i) => i + 1);
@@ -215,9 +233,14 @@ export default function TestReviewPage() {
                   if (locked) goNext();
                   else submitNumeric();
                 }}
-                disabled={locked}
+                // readOnly rather than disabled: a disabled input receives no
+                // keydown events, so "press Enter to continue" silently did
+                // nothing on numeric questions.
+                readOnly={locked}
                 placeholder="Your answer"
-                className="w-full flex-1 rounded-xl border border-border bg-panel2 px-4 py-2.5 text-sm outline-none transition-colors focus:border-white/50 disabled:opacity-60 sm:w-auto"
+                className={`w-full flex-1 rounded-xl border border-border bg-panel2 px-4 py-2.5 text-sm outline-none transition-colors focus:border-white/50 sm:w-auto ${
+                  locked ? "opacity-60" : ""
+                }`}
               />
               {!locked && (
                 <PrimaryButton onClick={submitNumeric} disabled={numInput.trim() === ""}>

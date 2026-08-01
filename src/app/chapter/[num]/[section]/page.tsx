@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, Badge, PrimaryButton, GhostButton } from "@/components/kit";
 import { DiagramByKey } from "@/components/Diagram";
 import { MathText, FormulaBlock } from "@/components/MathText";
@@ -10,6 +10,7 @@ import { Playground, hasPlayground } from "@/components/Playground";
 import { ExplainItBack } from "@/components/ExplainItBack";
 import { getLesson, lessonsForChapter } from "@/lib/data/lessons";
 import { getGuidedExample } from "@/lib/data/guidedExamples";
+import { useProfile } from "@/lib/useProfile";
 import { ArrowLeft, ArrowRight, ChatCircleDots } from "@phosphor-icons/react/dist/ssr";
 
 type Tab = "learn" | "work" | "play" | "explain";
@@ -18,6 +19,15 @@ export default function LessonPage({ params }: { params: { num: string; section:
   const chapterNum = parseInt(params.num, 10);
   const lesson = getLesson(params.section);
   const [tab, setTab] = useState<Tab>("learn");
+  const { recordSection } = useProfile();
+
+  // Mark the section as seen. Runs before the not-found guard below because
+  // hooks must be called in the same order on every render; the id check keeps
+  // it from recording anything for a bad URL.
+  const validId = lesson && lesson.ch === chapterNum ? lesson.id : null;
+  useEffect(() => {
+    if (validId) recordSection(validId, { viewed: true });
+  }, [validId, recordSection]);
 
   if (!lesson || lesson.ch !== chapterNum) {
     return (
@@ -148,7 +158,8 @@ export default function LessonPage({ params }: { params: { num: string; section:
             We solve this one step at a time. Do each step yourself, and you will get feedback
             before moving on.
           </p>
-          <GuidedExample example={guided} />
+          {/* key resets all step state if the example ever changes in place */}
+          <GuidedExample key={guided.sectionId} example={guided} />
         </div>
       )}
 
