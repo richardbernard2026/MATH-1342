@@ -1,4 +1,13 @@
-import { sql, dbConfigured, safeEqual, rateLimited, clientIp } from "@/lib/db";
+import {
+  sql,
+  dbConfigured,
+  safeEqual,
+  rateLimited,
+  clientIp,
+  ensureSchema,
+  safeErrorMessage,
+  isMissingTable,
+} from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +58,8 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, dbConfigured: false, people: [], exams: [], chapters: [] });
     }
 
+    await ensureSchema();
+
     // One row per student, with their progress rolled up.
     const people = await sql`
       SELECT
@@ -96,8 +107,26 @@ export async function POST(req: Request) {
     `;
 
     return Response.json({ ok: true, dbConfigured: true, people, exams, chapters });
-  } catch {
-    // Deliberately vague: does not name env vars or the hosting provider.
+  } catch (err) {
+    // Log the real reason (credentials scrubbed) so the next failure is
+    // diagnosable from the Vercel logs instead of guessed at.
+    console.error("[admin]", safeErrorMessage(err));
+
+    // The one case worth naming to the user: the passphrase was accepted but
+    // the database has no tables. Reporting that as a generic error makes it
+    // look like a login problem, which sends you hunting in the wrong place.
+    if (isMissingTable(err)) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Signed in, but the database tables do not exist yet. Run schema.sql in the Neon SQL editor, then reload.",
+        },
+        { status: 503 }
+      );
+    }
+
+    // Otherwise stay vague: no env var names, no hosting details.
     return Response.json({ ok: false, error: "Server error." }, { status: 500 });
   }
 }

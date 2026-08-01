@@ -1,10 +1,16 @@
 -- StatLab database schema
 --
--- Run these in the Neon SQL editor at console.neon.tech, one statement at a
--- time. The embedded Vercel "Query" browser is read-only and will reject
--- CREATE TABLE with "cannot execute CREATE TABLE in a read-only transaction".
+-- YOU DO NOT NEED TO RUN THIS. The app creates these tables itself on first
+-- use -- see ensureSchema() in src/lib/db.ts, which holds the same DDL. This
+-- file is here as readable reference, and for anyone who would rather set the
+-- database up explicitly before the app touches it.
 --
--- Every statement is safe to re-run.
+-- If you do run it: use the Neon SQL editor at console.neon.tech, one
+-- statement at a time. The embedded Vercel "Query" browser is read-only and
+-- rejects CREATE TABLE with "cannot execute CREATE TABLE in a read-only
+-- transaction".
+--
+-- Every statement is safe to re-run. Keep it in step with ensureSchema().
 --
 -- PRIVACY NOTE: the profiles table stores a first name. That makes this
 -- personal data, not anonymous data. Anyone you share the site with should be

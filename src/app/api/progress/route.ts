@@ -8,6 +8,8 @@ import {
   profileIdFor,
   ALLOWED_SECTIONS,
   ALLOWED_SCOPES,
+  ensureSchema,
+  safeErrorMessage,
 } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -40,6 +42,8 @@ export async function POST(req: Request) {
     if (!isValidUuid(uuid)) {
       return Response.json({ ok: false, error: "invalid id" }, { status: 400 });
     }
+
+    await ensureSchema();
 
     const profileId = await profileIdFor(uuid);
     if (!profileId) {
@@ -128,7 +132,8 @@ export async function POST(req: Request) {
     }
 
     return Response.json({ ok: false, error: "unknown kind" }, { status: 400 });
-  } catch {
+  } catch (err) {
+    console.error("[progress]", safeErrorMessage(err));
     return Response.json({ ok: false, error: "Server error." }, { status: 500 });
   }
 }

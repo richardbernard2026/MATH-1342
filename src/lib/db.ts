@@ -20,6 +20,114 @@ const connectionString =
 export const dbConfigured = Boolean(connectionString);
 export const sql = dbConfigured ? neon(connectionString as string) : null;
 
+/* ----------------------------------------------------------------- schema */
+
+/**
+ * Create the tables if they are not there yet.
+ *
+ * Requiring someone to paste schema.sql into the Neon console before anything
+ * works is a step that is easy to forget and gives no useful error when you do
+ * — every endpoint just returns 500 because `profiles` does not exist. The DDL
+ * is idempotent, so running it on first use costs one cheap round trip per cold
+ * instance and removes that failure mode entirely.
+ *
+ * The promise is cached, so concurrent requests on the same instance wait on a
+ * single attempt rather than racing. A failure is not cached: the next request
+ * retries rather than being stuck forever on one bad moment.
+ */
+let schemaReady: Promise<void> | null = null;
+
+export function ensureSchema(): Promise<void> {
+  if (!sql) return Promise.resolve();
+  if (schemaReady) return schemaReady;
+
+  schemaReady = (async () => {
+    await sql`
+      CREATE TABLE IF NOT EXISTS profiles (
+        id          SERIAL PRIMARY KEY,
+        uuid        TEXT UNIQUE NOT NULL,
+        first_name  TEXT NOT NULL,
+        created_at  TIMESTAMPTZ DEFAULT now(),
+        last_seen   TIMESTAMPTZ DEFAULT now()
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS section_progress (
+        id                SERIAL PRIMARY KEY,
+        profile_id        INTEGER REFERENCES profiles(id) ON DELETE CASCADE,
+        section_id        TEXT NOT NULL,
+        viewed            BOOLEAN DEFAULT false,
+        guided_completed  BOOLEAN DEFAULT false,
+        guided_first_try  INTEGER,
+        guided_steps      INTEGER,
+        explained         BOOLEAN DEFAULT false,
+        updated_at        TIMESTAMPTZ DEFAULT now(),
+        UNIQUE (profile_id, section_id)
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS practice_stats (
+        id          SERIAL PRIMARY KEY,
+        profile_id  INTEGER REFERENCES profiles(id) ON DELETE CASCADE,
+        chapter     INTEGER NOT NULL,
+        attempted   INTEGER DEFAULT 0,
+        correct     INTEGER DEFAULT 0,
+        updated_at  TIMESTAMPTZ DEFAULT now(),
+        UNIQUE (profile_id, chapter)
+      )
+    `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS exam_results (
+        id          SERIAL PRIMARY KEY,
+        profile_id  INTEGER REFERENCES profiles(id) ON DELETE CASCADE,
+        scope       TEXT NOT NULL,
+        score       INTEGER NOT NULL,
+        total       INTEGER NOT NULL CHECK (total > 0),
+        seconds     INTEGER,
+        breakdown   JSONB,
+        created_at  TIMESTAMPTZ DEFAULT now()
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_profiles_uuid    ON profiles(uuid)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_section_profile  ON section_progress(profile_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_practice_profile ON practice_stats(profile_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_exam_profile     ON exam_results(profile_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_exam_created     ON exam_results(created_at)`;
+  })();
+
+  schemaReady.catch(() => {
+    schemaReady = null; // let the next request try again
+  });
+
+  return schemaReady;
+}
+
+/* ------------------------------------------------------------- diagnostics */
+
+/**
+ * Turn a thrown value into something safe to write to the server log.
+ *
+ * Connection errors can carry the full connection string, password and all, so
+ * anything resembling `scheme://user:password@host` is redacted before it is
+ * ever written down. Vercel's logs are not a place to leak a database password.
+ */
+export function safeErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return raw.replace(/([a-z][a-z0-9+.-]*:\/\/)[^@\s]*@/gi, "$1***@").slice(0, 500);
+}
+
+/**
+ * Does this error mean "the tables are not there"?
+ *
+ * Postgres 42P01 is undefined_table. Worth naming specifically so the UI can
+ * say what is actually wrong instead of a generic failure.
+ */
+export function isMissingTable(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  if (code === "42P01") return true;
+  return /relation .* does not exist/i.test(safeErrorMessage(err));
+}
+
 /** Exam scopes that may be written to exam_results. */
 export const ALLOWED_SCOPES = ["t1", "t2", "cum"] as const;
 

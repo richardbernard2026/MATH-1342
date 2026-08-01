@@ -4,6 +4,8 @@ import {
   isValidUuid,
   cleanFirstName,
   sameOrigin,
+  ensureSchema,
+  safeErrorMessage,
 } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -34,6 +36,8 @@ export async function POST(req: Request) {
     if (!isValidUuid(uuid)) {
       return Response.json({ ok: false, error: "invalid id" }, { status: 400 });
     }
+
+    await ensureSchema();
 
     const name = body?.firstName !== undefined ? cleanFirstName(body.firstName) : undefined;
 
@@ -80,7 +84,11 @@ export async function POST(req: Request) {
       practice,
       exams,
     });
-  } catch {
-    return Response.json({ ok: false, error: "Server error." }, { status: 500 });
+  } catch (err) {
+    console.error("[profile]", safeErrorMessage(err));
+    // The site is usable without sync, so report this as "not synced" rather
+    // than an error. A student mid-problem should not see a failure banner
+    // because a database is having a bad minute.
+    return Response.json({ ok: true, synced: false, profile: null });
   }
 }

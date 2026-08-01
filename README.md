@@ -40,7 +40,9 @@ All three are optional. Everything except the tutor works with none of them set.
 | `DATABASE_URL` | Neon Postgres for profiles and progress | Progress stays in the browser only |
 | `ADMIN_SECRET` | Passphrase for `/admin-1342` | Admin returns "not configured" |
 
-Before `DATABASE_URL` does anything useful, run `schema.sql` in the Neon SQL editor at console.neon.tech. The Query browser embedded in Vercel is read-only and will reject `CREATE TABLE`.
+**You do not need to run `schema.sql` by hand.** The app creates its tables on first use — the DDL is idempotent and lives in `ensureSchema()` in `src/lib/db.ts`. `schema.sql` is kept as readable reference and for anyone who prefers to set the database up explicitly; if you do run it, use the Neon SQL editor at console.neon.tech, since the Query browser embedded in Vercel is read-only and rejects `CREATE TABLE`.
+
+If a database call does fail, the reason is written to the Vercel runtime logs (with credentials scrubbed) rather than swallowed. Look under **Logs** in the project, filtered to `/api/`.
 
 For local development, copy `.env.example` to `.env.local` and fill it in. `.env.local` is gitignored and must never be committed.
 
