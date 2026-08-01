@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* KaTeX stylesheet, loaded from the npm package */
+@import "katex/dist/katex.min.css";
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0b0d12;
+  color: #e8eaf0;
+}
+
+::selection {
+  background: #4f8fff55;
+}
+
+.fadein {
+  animation: fadein 0.25s ease both;
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* KaTeX renders at its own size; nudge it to match surrounding text */
+.katex {
+  font-size: 1.05em;
+}
+
+/* Display-mode math blocks get a little breathing room */
+.katex-display {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
