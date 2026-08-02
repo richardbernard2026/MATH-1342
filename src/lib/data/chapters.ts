@@ -81,5 +81,5 @@ export function getChapter(num: number) {
 export const examScopes = [
   { key: "t1", label: "Test 1 (Ch 1-3)", chapters: [1, 2, 3] },
   { key: "t2", label: "Test 2 (Ch 4-6)", chapters: [4, 5, 6] },
-  { key: "cum", label: "Cumulative (all 60)", chapters: [1, 2, 3, 4, 5, 6] },
+  { key: "cum", label: "Cumulative (all 65)", chapters: [1, 2, 3, 4, 5, 6] },
 ];

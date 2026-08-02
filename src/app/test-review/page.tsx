@@ -18,6 +18,36 @@ function formatTime(total: number) {
   return `${m}:${s}`;
 }
 
+/**
+ * Shuffle the options of a multiple-choice question, moving the answer index
+ * with them.
+ *
+ * Without this, the correct option sat on the same position often enough that
+ * always picking the second choice scored better than guessing. That is a way
+ * to pass the mock without knowing the material, and it also lets you memorize
+ * positions instead of reasoning. Real exams reorder; so does this one now.
+ *
+ * Options whose order is itself the lesson are left alone — the measurement
+ * hierarchy reads nominal, ordinal, interval, ratio, and scrambling it would
+ * be teaching against the point of the question.
+ */
+const ORDERED_SCALES = [
+  ["Nominal", "Ordinal", "Interval", "Ratio"].join("|"),
+  ["Descriptive", "Inferential"].join("|"),
+];
+
+function shuffleOptions(q: Question): Question {
+  if (q.type !== "mc") return q;
+  if (ORDERED_SCALES.includes(q.options.join("|"))) return q;
+
+  const order = shuffle(q.options.map((_, i) => i));
+  return {
+    ...q,
+    options: order.map((i) => q.options[i]),
+    answer: order.indexOf(q.answer),
+  };
+}
+
 export default function TestReviewPage() {
   const { recordExam } = useProfile();
   const [phase, setPhase] = useState<Phase>("intro");
@@ -46,7 +76,7 @@ export default function TestReviewPage() {
   }, [phase, index, questions, locked]);
 
   function start(s = scope) {
-    const pool = shuffle(testBank.filter((q) => s.chapters.includes(q.ch)));
+    const pool = shuffle(testBank.filter((q) => s.chapters.includes(q.ch))).map(shuffleOptions);
     // Never enter the running phase with nothing to show: the question lookup
     // would be undefined and the screen would go blank with no way back.
     if (pool.length === 0) return;

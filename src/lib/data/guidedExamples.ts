@@ -132,13 +132,18 @@ export const guidedExamples: GuidedExample[] = [
   {
     sectionId: "2.1",
     title: "Building a grouped frequency distribution",
+    // The original scenario ran 12 to 87 with 5 classes. 75/5 is exactly 15,
+    // and classes of width 15 starting at 12 end at 86 — leaving the value 87
+    // with nowhere to go. That edge case depends on a convention this course
+    // never states, and the professor's own worked solutions never hit it, so
+    // the highest value moved to 89 and the arithmetic is now unambiguous.
     scenario:
-      "You collect 40 exam scores. The lowest is 12 and the highest is 87. You want to organize them into 5 classes.",
+      "You collect 40 exam scores. The lowest is 12 and the highest is 89. You want to organize them into 5 classes.",
     steps: [
       S(
         "First, find the range.",
         "numeric",
-        75,
+        77,
         "Range is just the highest value minus the lowest.",
         "The range tells you how much ground the classes have to cover in total. Everything else follows from it.",
         { tol: 0.01 }
@@ -146,17 +151,17 @@ export const guidedExamples: GuidedExample[] = [
       S(
         "Now find the class width. Remember the rounding rule.",
         "numeric",
-        15,
-        "Divide the range by the number of classes, then round UP even if it divides evenly.",
-        "75 divided by 5 is exactly 15. You always round up, because rounding down would leave the largest values with no class to fall into.",
+        16,
+        "Divide the range by the number of classes, then round UP.",
+        "77 divided by 5 is 15.4, which rounds up to 16. You always round up, because rounding down would leave the largest values with no class to fall into. Check it: five classes of width 16 starting at 12 reach 91, which comfortably covers 89.",
         { tol: 0.01 }
       ),
       S(
-        "The first class starts at 12 and is 15 wide. What is its UPPER class LIMIT?",
+        "The first class starts at 12 and is 16 wide. What is its UPPER class LIMIT?",
         "numeric",
-        26,
-        "The first class covers 12 through 26, which is 15 values counting both ends.",
-        "12 to 26 inclusive is 15 values. Limits are the numbers you actually write in the table; boundaries come next.",
+        27,
+        "The first class covers 12 through 27, which is 16 values counting both ends.",
+        "12 to 27 inclusive is 16 values. Limits are the numbers you actually write in the table; boundaries come next.",
         { tol: 0.01 }
       ),
       S(
@@ -245,12 +250,17 @@ export const guidedExamples: GuidedExample[] = [
         "A pie graph. Each wedge is sized by that category's percentage of the total. It is weak for comparing similar-sized categories, but strong for showing composition.",
         { choices: ["Time series graph", "Pie graph", "Ogive", "Histogram"] }
       ),
+      // Reworded: "the number of jobs each month" is data over time, and this
+      // example had already established that time data gets a time series
+      // graph — so the original version had two defensible answers. The point
+      // being tested is "keep every original value", so the scenario now has
+      // no time ordering to compete with it.
       S(
-        "\"The exact number of jobs each month for six months\" — they want to keep every original value visible. Best graph?",
+        "\"The exact repair cost of all 40 jobs, with every original value still readable\" — best graph?",
         "choice",
         3,
         "A histogram would bucket the values into ranges and lose the individual numbers.",
-        "A stem-and-leaf plot. It shows the distribution's shape while preserving every exact data value, which a histogram cannot do because it groups values into classes.",
+        "A stem-and-leaf plot. It shows the distribution's shape while preserving every exact data value, which a histogram cannot do because it groups values into classes. A dotplot also keeps every value, and for a small data set it is just as good a choice.",
         { choices: ["Histogram", "Pie graph", "Pareto chart", "Stem-and-leaf plot"] }
       ),
     ],
@@ -433,12 +443,16 @@ export const guidedExamples: GuidedExample[] = [
         "11.5 + 1.5(5) = 19. So 30 is an outlier and gets its own dot. The right whisker stops at 12, the largest value that is NOT an outlier.",
         { tol: 0.05 }
       ),
+      // The stem used to claim the median sat left of center with a long right
+      // whisker. Neither was true of this data: Q1 to median and median to Q3
+      // are both 2.5, and the LEFT whisker is the longer one. The shape here is
+      // driven entirely by the outlier, so the question now says so.
       S(
-        "The median sits near the left of the box and the right side stretches far. What shape is this?",
+        "The box itself is symmetric and the whiskers are short, but 30 sits far out on its own. What shape is this distribution?",
         "choice",
         0,
-        "Which direction does the long tail point?",
-        "Skewed right. The tail stretches toward the high values. Since it is clearly not symmetric, Chapter 6's normal-distribution methods would not be appropriate for this data.",
+        "Ignore the box for a moment. Which direction does the extreme value pull?",
+        "Skewed right. The box is balanced and the whiskers are short, so on its own the middle looks symmetric — but the outlier at 30 sits far above everything else and drags the tail to the right. A single extreme value is enough to skew a distribution, which is exactly why you plot it separately instead of hiding it inside a whisker.",
         { choices: ["Skewed right", "Skewed left", "Symmetric"] }
       ),
     ],

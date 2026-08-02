@@ -54,7 +54,7 @@ export const lessons: Lesson[] = [
     2,
     "Organizing Data",
     "Raw data is a shapeless list of values. A frequency distribution sorts those values into classes and counts how many land in each. Use a categorical distribution for labels, an ungrouped one when there are only a few distinct values, and a grouped one when the range is wide.",
-    "$\\text{range} = \\text{highest} - \\text{lowest}$\n$\\text{class width} = \\left\\lceil \\dfrac{\\text{range}}{\\text{number of classes}} \\right\\rceil$ (always round UP)\n$\\text{class midpoint} = \\dfrac{\\text{lower limit} + \\text{upper limit}}{2}$\nClass boundaries $=$ limits shifted by $0.5$ so the bars touch",
+    "$\\text{range} = \\text{highest} - \\text{lowest}$\n$\\text{class width} = \\dfrac{\\text{range}}{\\text{number of classes}}$, always rounded UP to a whole number\n$\\text{class midpoint} = \\dfrac{\\text{lower limit} + \\text{upper limit}}{2}$\nClass boundaries $=$ limits shifted by $0.5$ so the bars touch\nCheck: width $\\times$ number of classes must reach the largest value",
     "1.2's levels of measurement, which decide whether classes are categories or numeric ranges.",
     "2.2 turns this exact table into a histogram, a frequency polygon, or an ogive.",
     "histogram"

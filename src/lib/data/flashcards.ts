@@ -76,9 +76,16 @@ export const flashcards: Flashcard[] = [
   F("c6-2", 6, "Raw score from z", "$X = \\mu + z\\sigma$", "The z-score formula solved for $X$."),
   F("c6-3", 6, "Area to the right of z", "$1 - (\\text{area to the left})$", "Total area under the curve is always 1."),
   F("c6-4", 6, "Area between two z-values", "(larger left area) $-$ (smaller left area)", "Subtract the smaller region from the bigger one."),
-  F("c6-5", 6, "Empirical Rule, 1 sd", "about $68\\%$", "Fast estimate, no table needed."),
-  F("c6-6", 6, "Empirical Rule, 2 sd", "about $95\\%$", "Fast estimate, no table needed."),
-  F("c6-7", 6, "Empirical Rule, 3 sd", "about $99.7\\%$", "Fast estimate, no table needed."),
+  // The Empirical Rule is taught in section 3.2, not in Chapter 6, so these
+  // were filed under the wrong chapter and would never surface when revising
+  // Chapter 3. Retagged, and the three near-identical cards are replaced with
+  // Chapter 6 material that genuinely had no card: the "between two z-scores"
+  // rule, the sampling distribution, and the standard error.
+  F("c3-11", 3, "Chebyshev's theorem", "at least $1 - \\dfrac{1}{k^2}$ of ANY data lies within $k$ sd", "Works for any shape, but only promises a minimum."),
+  F("c3-12", 3, "Chebyshev at $k=2$ and $k=3$", "at least $75\\%$ and at least $88.9\\%$", "Compare with the Empirical Rule's 95% and 99.7% for bell-shaped data."),
+  F("c6-5", 6, "Area BETWEEN two z-scores", "$\\text{area}(z_2) - \\text{area}(z_1)$", "Table E is always left-tail, so between means subtract."),
+  F("c6-6", 6, "Sampling distribution of $\\bar{x}$", "mean $= \\mu$, standard error $= \\dfrac{\\sigma}{\\sqrt{n}}$", "The mean does not change; the spread shrinks as n grows."),
+  F("c6-7", 6, "Which denominator, $\\sigma$ or $\\sigma/\\sqrt{n}$?", "single value uses $\\sigma$; sample MEAN uses $\\dfrac{\\sigma}{\\sqrt{n}}$", "Missing this is the most common Chapter 6 error."),
   F("c6-8", 6, "Standard error", "$\\sigma_{\\bar{x}} = \\dfrac{\\sigma}{\\sqrt{n}}$", "The spread of sample means, not of individuals."),
   F("c6-9", 6, "z for a SAMPLE MEAN", "$z = \\dfrac{\\bar{x} - \\mu}{\\sigma / \\sqrt{n}}$", "Same formula, with $\\sigma$ replaced by the standard error."),
   F("c6-10", 6, "Central Limit Theorem", "Sample means approach a normal distribution as $n$ grows", "True no matter what shape the population has."),
