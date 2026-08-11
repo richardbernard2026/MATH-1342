@@ -71,6 +71,38 @@ export const chapters: ChapterMeta[] = [
       { id: "6.3", title: "Central Limit Theorem & Sample Means" },
     ],
   },
+  {
+    num: 7,
+    title: "Confidence Intervals & Sample Size",
+    blurb:
+      "Turning a single sample mean into an interval estimate, with z when sigma is known and t when it is not.",
+    sections: [
+      { id: "7.1", title: "Confidence Intervals & Sample Size" },
+      { id: "7.2", title: "CI for the Mean (sigma known)" },
+      { id: "7.3", title: "CI for the Mean (sigma unknown)" },
+    ],
+  },
+  {
+    num: 8,
+    title: "Hypothesis Testing",
+    blurb:
+      "Stating H0 and H1, choosing one tail or two, and reaching a conclusion by either the traditional method or the P-value method.",
+    sections: [
+      { id: "8.1", title: "Steps in Hypothesis Testing" },
+      { id: "8.2", title: "z Test for a Mean" },
+      { id: "8.3", title: "t Test for a Mean" },
+    ],
+  },
+  {
+    num: 10,
+    title: "Correlation & Regression",
+    blurb:
+      "Measuring the strength of a linear relationship, testing whether it is real, and fitting a line to predict with.",
+    sections: [
+      { id: "10.1", title: "Correlation" },
+      { id: "10.2", title: "Regression" },
+    ],
+  },
 ];
 
 export function getChapter(num: number) {
@@ -81,5 +113,45 @@ export function getChapter(num: number) {
 export const examScopes = [
   { key: "t1", label: "Test 1 (Ch 1-3)", chapters: [1, 2, 3] },
   { key: "t2", label: "Test 2 (Ch 4-6)", chapters: [4, 5, 6] },
-  { key: "cum", label: "Cumulative (all 65)", chapters: [1, 2, 3, 4, 5, 6] },
+  { key: "t3", label: "Test 3 (Ch 7-8)", chapters: [7, 8] },
+  { key: "cum", label: "Final (comprehensive)", chapters: [1, 2, 3, 4, 5, 6, 7, 8, 10] },
 ];
+
+/**
+ * Course calendar dates that the session planner reasons about.
+ * Summer II 2026, MATH 1342.92L.
+ */
+export const examDates: Record<string, string> = {
+  t3: "2026-08-18",
+  final: "2026-08-21",
+};
+
+/**
+ * The order sections are taught in, which is not the same as sorting the ids
+ * as numbers (10.1 comes after 8.3, not after 1.2). Used by the scheduler to
+ * decide what counts as "new" versus "review" on a given day.
+ */
+export const teachingOrder: string[] = [
+  "1.1", "1.2",
+  "2.1", "2.2", "2.3",
+  "3.1", "3.2", "3.3", "3.4",
+  "4.1", "4.2", "4.3",
+  "5.1", "5.2", "5.3",
+  "6.1", "6.2", "6.3",
+  "7.1", "7.2", "7.3",
+  "8.1", "8.2", "8.3",
+  "10.1", "10.2",
+];
+
+/** The date each section was, or will be, covered in class. */
+export const sectionTaughtOn: Record<string, string> = {
+  "1.1": "2026-07-16", "1.2": "2026-07-17",
+  "2.1": "2026-07-20", "2.2": "2026-07-21", "2.3": "2026-07-21",
+  "3.1": "2026-07-22", "3.2": "2026-07-23", "3.3": "2026-07-24", "3.4": "2026-07-24",
+  "4.1": "2026-07-29", "4.2": "2026-07-29", "4.3": "2026-07-30",
+  "5.1": "2026-07-31", "5.2": "2026-07-31", "5.3": "2026-08-03",
+  "6.1": "2026-08-04", "6.2": "2026-08-05", "6.3": "2026-08-05",
+  "7.1": "2026-08-10", "7.2": "2026-08-10", "7.3": "2026-08-11",
+  "8.1": "2026-08-12", "8.2": "2026-08-13", "8.3": "2026-08-14",
+  "10.1": "2026-08-19", "10.2": "2026-08-19",
+};

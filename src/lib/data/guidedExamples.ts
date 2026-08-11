@@ -10,6 +10,11 @@
  * step can never drift out of sync with its own prompt.
  */
 
+import { ch7Guided } from "@/lib/data/ch7";
+import { ch8Guided } from "@/lib/data/ch8";
+import { ch10Guided } from "@/lib/data/ch10";
+
+
 export type GuidedStep = {
   /** What the student is being asked to produce at this step. */
   ask: string;
@@ -133,7 +138,7 @@ export const guidedExamples: GuidedExample[] = [
     sectionId: "2.1",
     title: "Building a grouped frequency distribution",
     // The original scenario ran 12 to 87 with 5 classes. 75/5 is exactly 15,
-    // and classes of width 15 starting at 12 end at 86 — leaving the value 87
+    // and classes of width 15 starting at 12 end at 86, leaving the value 87
     // with nowhere to go. That edge case depends on a convention this course
     // never states, and the professor's own worked solutions never hit it, so
     // the highest value moved to 89 and the arithmetic is now unambiguous.
@@ -227,7 +232,7 @@ export const guidedExamples: GuidedExample[] = [
       "A detailing shop wants four different pictures of its business: which service earns the most, how revenue changed over 12 months, what share of jobs each service represents, and the exact number of jobs completed each month for six months.",
     steps: [
       S(
-        "\"Which service earns the most\" — they want the biggest category to jump out immediately. Best graph?",
+        "\"Which service earns the most\". They want the biggest category to jump out immediately. Best graph?",
         "choice",
         1,
         "A plain bar graph works, but one variant sorts the bars so the winner is unmistakable.",
@@ -235,7 +240,7 @@ export const guidedExamples: GuidedExample[] = [
         { choices: ["Histogram", "Pareto chart", "Pie graph", "Ogive"] }
       ),
       S(
-        "\"How revenue changed over 12 months\" — best graph?",
+        "\"How revenue changed over 12 months\". Best graph?",
         "choice",
         2,
         "Anything measured across time has a standard presentation.",
@@ -243,7 +248,7 @@ export const guidedExamples: GuidedExample[] = [
         { choices: ["Pareto chart", "Stem-and-leaf plot", "Time series graph", "Histogram"] }
       ),
       S(
-        "\"What share of jobs each service represents\" — best graph?",
+        "\"What share of jobs each service represents\". Best graph?",
         "choice",
         1,
         "They want parts of a whole, expressed as percentages.",
@@ -252,11 +257,11 @@ export const guidedExamples: GuidedExample[] = [
       ),
       // Reworded: "the number of jobs each month" is data over time, and this
       // example had already established that time data gets a time series
-      // graph — so the original version had two defensible answers. The point
+      // graph, so the original version had two defensible answers. The point
       // being tested is "keep every original value", so the scenario now has
       // no time ordering to compete with it.
       S(
-        "\"The exact repair cost of all 40 jobs, with every original value still readable\" — best graph?",
+        "\"The exact repair cost of all 40 jobs, with every original value still readable\". Best graph?",
         "choice",
         3,
         "A histogram would bucket the values into ranges and lose the individual numbers.",
@@ -452,7 +457,7 @@ export const guidedExamples: GuidedExample[] = [
         "choice",
         0,
         "Ignore the box for a moment. Which direction does the extreme value pull?",
-        "Skewed right. The box is balanced and the whiskers are short, so on its own the middle looks symmetric — but the outlier at 30 sits far above everything else and drags the tail to the right. A single extreme value is enough to skew a distribution, which is exactly why you plot it separately instead of hiding it inside a whisker.",
+        "Skewed right. The box is balanced and the whiskers are short, so on its own the middle looks symmetric, but the outlier at 30 sits far above everything else and drags the tail to the right. A single extreme value is enough to skew a distribution, which is exactly why you plot it separately instead of hiding it inside a whisker.",
         { choices: ["Skewed right", "Skewed left", "Symmetric"] }
       ),
     ],
@@ -822,6 +827,8 @@ export const guidedExamples: GuidedExample[] = [
       "One question decides everything: is this about a single value or an average? If it is an average, sigma becomes sigma over root n, and every other step is unchanged.",
   },
 ];
+
+guidedExamples.push(...ch7Guided, ...ch8Guided, ...ch10Guided);
 
 export function getGuidedExample(sectionId: string) {
   return guidedExamples.find((g) => g.sectionId === sectionId);

@@ -6,6 +6,11 @@
  * read before the formula, not after it.
  */
 
+import { ch7Lessons } from "@/lib/data/ch7";
+import { ch8Lessons } from "@/lib/data/ch8";
+import { ch10Lessons } from "@/lib/data/ch10";
+
+
 export type Lesson = {
   id: string;
   ch: number;
@@ -210,6 +215,10 @@ export const lessons: Lesson[] = [
     "clt"
   ),
 ];
+
+/** Chapters 7, 8 and 10 live in their own modules; merged in here so every
+ *  consumer keeps using a single `lessons` array. */
+lessons.push(...ch7Lessons, ...ch8Lessons, ...ch10Lessons);
 
 export function getLesson(id: string) {
   return lessons.find((l) => l.id === id);

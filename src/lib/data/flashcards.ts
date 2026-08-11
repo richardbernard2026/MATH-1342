@@ -1,5 +1,10 @@
 /** 60 flashcards, 10 per chapter. `back` may contain LaTeX between $...$. */
 
+import { ch7Flashcards } from "@/lib/data/ch7";
+import { ch8Flashcards } from "@/lib/data/ch8";
+import { ch10Flashcards } from "@/lib/data/ch10";
+
+
 export type Flashcard = { id: string; ch: number; front: string; back: string; why: string };
 
 const F = (id: string, ch: number, front: string, back: string, why: string): Flashcard => ({
@@ -90,3 +95,5 @@ export const flashcards: Flashcard[] = [
   F("c6-9", 6, "z for a SAMPLE MEAN", "$z = \\dfrac{\\bar{x} - \\mu}{\\sigma / \\sqrt{n}}$", "Same formula, with $\\sigma$ replaced by the standard error."),
   F("c6-10", 6, "Central Limit Theorem", "Sample means approach a normal distribution as $n$ grows", "True no matter what shape the population has."),
 ];
+
+flashcards.push(...ch7Flashcards, ...ch8Flashcards, ...ch10Flashcards);

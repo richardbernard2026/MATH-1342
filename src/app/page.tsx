@@ -132,7 +132,7 @@ export default function HomePage() {
           </h1>
           <p className="mt-2 max-w-xl text-sm text-[#9aa1b2]">
             {stats.viewed === 0
-              ? "Nothing studied yet. Open one section — from there the site tracks what you do and points you at whatever will help most."
+              ? "Nothing studied yet. Open one section. From there the site tracks what you do and points you at whatever will help most."
               : `${stats.viewed} of ${stats.total} sections opened, ${stats.guided} worked all the way through.`}
           </p>
         </div>

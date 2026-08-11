@@ -30,6 +30,10 @@ import {
  * is most of what an exam actually tests.
  */
 
+import { ch7Generators, ch7Topics } from "@/lib/data/ch7";
+import { ch8Generators, ch8Topics } from "@/lib/data/ch8";
+import { ch10Generators, ch10Topics } from "@/lib/data/ch10";
+
 export type PracticeProblem = {
   ch: number;
   topic: string;
@@ -102,6 +106,11 @@ export const topicsByChapter: Record<number, { key: string; label: string }[]> =
     { key: "clt", label: "Central Limit Theorem" },
   ],
 };
+
+topicsByChapter[7] = ch7Topics;
+topicsByChapter[8] = ch8Topics;
+topicsByChapter[10] = ch10Topics;
+
 
 /* ------------------------------------------------------------- cover stories */
 
@@ -943,7 +952,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "Quartiles & Outliers",
       pick([
         `${setup(c, n)}: ${list(data)}. Find ${which}.`,
-        `For these ${c.plural} (in ${c.unit}) — ${list(data)} — find ${which}.`,
+        `For these ${c.plural} (in ${c.unit}): ${list(data)}. Find ${which}.`,
         `Given the data ${list(data)}, determine ${which}.`,
       ]),
       steps,
@@ -982,7 +991,7 @@ const generators: Record<string, () => PracticeProblem> = {
           `Lower fence $= ${Q1} - 1.5(${round(iqr, 4)}) = ${round(lower, 3)}$`,
           `Upper fence $= ${Q3} + 1.5(${round(iqr, 4)}) = ${round(upper, 3)}$`,
           outliers.length
-            ? `Outside the fences: ${list(outliers)} — that is ${outliers.length}.`
+            ? `Outside the fences: ${list(outliers)}, that is ${outliers.length}.`
             : `Every value sits inside the fences, so there are 0 outliers.`,
         ],
         outliers.length,
@@ -1291,7 +1300,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "Conditional Probability",
       `A survey produced this table:\n\n| | ${rows.c[0]} | ${rows.c[1]} |\n|---|---|---|\n| ${rows.r[0]} | ${a11} | ${a12} |\n| ${rows.r[1]} | ${a21} | ${a22} |\n\nGiven that a randomly chosen person ${givenRow ? `is ${rows.r[0].toLowerCase()}` : `${rows.c[0].toLowerCase()}`}, find the probability that the person ${givenRow ? `${rows.c[0].toLowerCase()}` : `is ${rows.r[0].toLowerCase()}`}. Give a decimal.`,
       [
-        `Conditioning restricts you to one row or column — that becomes the new denominator.`,
+        `Conditioning restricts you to one row or column, and that becomes the new denominator.`,
         givenRow
           ? `Row total for ${rows.r[0]}: $${a11} + ${a12} = ${rowTot}$`
           : `Column total for ${rows.c[0]}: $${a11} + ${a21} = ${colTot}$`,
@@ -1347,7 +1356,7 @@ const generators: Record<string, () => PracticeProblem> = {
           "validdist",
           "Is It a Distribution?",
           `Let X be ${story.name}. Is this a valid probability distribution?\n\nP(0) = ${P[0]}, P(1) = ${P[1]}, P(2) = ${P[2]}, P(3) = ${P[3]}`,
-          ["Yes, it is valid", "No — the probabilities do not sum to 1", "No — a probability is negative"],
+          ["Yes, it is valid", "No, the probabilities do not sum to 1", "No, a probability is negative"],
           1,
           [
             `$\\sum P(X) = ${P.join(" + ")} = ${round(P.reduce((a, b) => a + b, 0), 4)}$`,
@@ -1360,7 +1369,7 @@ const generators: Record<string, () => PracticeProblem> = {
         "validdist",
         "Is It a Distribution?",
         `Let X be ${story.name}. Is this a valid probability distribution?\n\nP(0) = 0.5, P(1) = 0.7, P(2) = -0.2`,
-        ["Yes, it is valid", "No — the probabilities do not sum to 1", "No — a probability is negative"],
+        ["Yes, it is valid", "No, the probabilities do not sum to 1", "No, a probability is negative"],
         2,
         [
           "The values do sum to $0.5 + 0.7 - 0.2 = 1$, so the sum condition passes.",
@@ -1375,7 +1384,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "validdist",
       "Is It a Distribution?",
       `Let X be ${story.name}. Is this a valid probability distribution?\n\n${d.X.map((x, i) => `P(${x}) = ${d.P[i]}`).join(", ")}`,
-      ["Yes, it is valid", "No — the probabilities do not sum to 1", "No — a probability is negative"],
+      ["Yes, it is valid", "No, the probabilities do not sum to 1", "No, a probability is negative"],
       0,
       [
         `$\\sum P(X) = ${d.P.join(" + ")} = ${round(d.P.reduce((a, b) => a + b, 0), 4)}$`,
@@ -1695,7 +1704,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "Central Limit Theorem",
       `${cap(c.plural)} have $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. A sample of $n = ${n}$ has sample mean $\\bar{x} = ${xbarShown}$. Find the z-score for this sample mean.`,
       [
-        `Use the standard error, NOT $\\sigma$ — this is a sample mean, not a single value.`,
+        `Use the standard error, NOT $\\sigma$, this is a sample mean, not a single value.`,
         `$\\sigma_{\\bar{x}} = \\dfrac{${sigma}}{\\sqrt{${n}}} = ${round(se, 4)}$`,
         `$z = \\dfrac{${xbarShown} - ${mu}}{${round(se, 4)}} = ${round(zExact, 3)}$`,
       ],
@@ -1704,6 +1713,9 @@ const generators: Record<string, () => PracticeProblem> = {
     );
   },
 };
+
+Object.assign(generators, ch7Generators, ch8Generators, ch10Generators);
+
 
 export function generateProblem(ch: number, topicKey?: string): PracticeProblem {
   const topics = topicsByChapter[ch] || topicsByChapter[4];

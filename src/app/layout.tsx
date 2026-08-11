@@ -5,7 +5,7 @@ import { ProfileProvider } from "@/lib/useProfile";
 import { NameGate } from "@/components/NameGate";
 
 export const metadata: Metadata = {
-  title: "StatLab — MATH 1342",
+  title: "StatLab, MATH 1342",
   description:
     "An evidence-based learning system for Elementary Statistical Methods: lessons, practice, mock exams, flashcards, and an AI tutor.",
 };

@@ -129,6 +129,123 @@ export function pdf(z: number) {
   return Math.exp((-z * z) / 2) / Math.sqrt(2 * Math.PI);
 }
 
+/* ------------------------------------------------------------------ *
+ * Student t distribution (Chapters 7 and 8)
+ *
+ * Both functions use the SAME orientation as normalCDF / normalInv:
+ * an "area" is always the area to the LEFT. Table F in the course packet
+ * is printed the other way (it lists right-tail areas at the top), so the
+ * table helpers in ch7.ts and ch8.ts convert; nothing here assumes a table.
+ * ------------------------------------------------------------------ */
+
+/** Lanczos approximation of ln(gamma(x)). Accurate to ~1e-13 for x > 0. */
+function logGamma(x: number): number {
+  const g = [
+    76.18009172947146, -86.50532032941677, 24.01409824083091,
+    -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5,
+  ];
+  let y = x;
+  const tmp = x + 5.5 - (x + 0.5) * Math.log(x + 5.5);
+  let ser = 1.000000000190015;
+  for (let j = 0; j < 6; j++) ser += g[j] / ++y;
+  return -tmp + Math.log((2.5066282746310005 * ser) / x);
+}
+
+/**
+ * Continued fraction for the incomplete beta function (Numerical Recipes
+ * betacf). Converges fast for x < (a+1)/(a+b+2); the caller flips when not.
+ */
+function betaCF(a: number, b: number, x: number): number {
+  const MAXIT = 300;
+  const EPS = 3e-16;
+  const FPMIN = 1e-300;
+  const qab = a + b;
+  const qap = a + 1;
+  const qam = a - 1;
+  let c = 1;
+  let d = 1 - (qab * x) / qap;
+  if (Math.abs(d) < FPMIN) d = FPMIN;
+  d = 1 / d;
+  let h = d;
+  for (let m = 1; m <= MAXIT; m++) {
+    const m2 = 2 * m;
+    let aa = (m * (b - m) * x) / ((qam + m2) * (a + m2));
+    d = 1 + aa * d;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = 1 + aa / c;
+    if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    h *= d * c;
+    aa = (-(a + m) * (qab + m) * x) / ((a + m2) * (qap + m2));
+    d = 1 + aa * d;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = 1 + aa / c;
+    if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < EPS) break;
+  }
+  return h;
+}
+
+/** Regularized incomplete beta I_x(a, b). */
+function incompleteBeta(a: number, b: number, x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const front = Math.exp(
+    logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log(1 - x)
+  );
+  if (x < (a + 1) / (a + b + 2)) return (front * betaCF(a, b, x)) / a;
+  return 1 - (front * betaCF(b, a, 1 - x)) / b;
+}
+
+/**
+ * Area under the t curve to the LEFT of t, with df degrees of freedom.
+ *
+ * This is the t analogue of normalCDF. As df grows it converges to
+ * normalCDF, which is exactly why Table F's bottom row matches Table E.
+ */
+export function tCDF(t: number, df: number): number {
+  if (!isFinite(t)) return t > 0 ? 1 : 0;
+  if (df <= 0) return NaN;
+  const p = 0.5 * incompleteBeta(df / 2, 0.5, df / (df + t * t));
+  return t > 0 ? 1 - p : p;
+}
+
+/**
+ * Inverse t: given an area to the LEFT, return the t value.
+ *
+ * Bisection on tCDF rather than a closed form. It is called a handful of
+ * times per problem, never in a render loop, so ~60 iterations of a
+ * guaranteed-convergent method is the right trade against an approximation
+ * that drifts in the tails where this course actually lives.
+ */
+export function tInv(area: number, df: number): number {
+  if (area <= 0) return -Infinity;
+  if (area >= 1) return Infinity;
+  if (df <= 0) return NaN;
+  if (Math.abs(area - 0.5) < 1e-15) return 0;
+  let lo = -400;
+  let hi = 400;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    if (tCDF(mid, df) < area) lo = mid;
+    else hi = mid;
+    if (hi - lo < 1e-12) break;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * Two-tailed critical t for a confidence level, e.g. tCritical(0.95, 21).
+ * Provided because it is the single most common lookup in Chapter 7 and
+ * getting the tail split wrong is the most common way to lose those points.
+ */
+export function tCritical(confidence: number, df: number): number {
+  return tInv(1 - (1 - confidence) / 2, df);
+}
+
 export function pick<T>(a: T[]): T {
   return a[Math.floor(Math.random() * a.length)];
 }

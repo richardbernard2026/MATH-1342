@@ -15,6 +15,11 @@
  * so the position of the correct answer carries no information.
  */
 
+import { ch7Questions } from "@/lib/data/ch7";
+import { ch8Questions } from "@/lib/data/ch8";
+import { ch10Questions } from "@/lib/data/ch10";
+
+
 export type Question =
   | {
       ch: number;
@@ -154,3 +159,5 @@ export const testBank: Question[] = [
   U(6, "mu = 50, sigma = 12, n = 36, and the sample mean is 53. Find the z-score.", 1.5, 0.05, "Standard error = 12/6 = 2, so z = 3/2 = 1.5."),
   M(6, "The Central Limit Theorem says that as n increases, sample means approach...", ["A binomial distribution", "The same shape as the population", "A normal distribution regardless of the population's shape", "A uniform distribution"], 2, "That is exactly what the CLT guarantees."),
 ];
+
+testBank.push(...ch7Questions, ...ch8Questions, ...ch10Questions);
