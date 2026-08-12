@@ -41,6 +41,7 @@ import {
   Sun,
   MoonStars,
   Flag,
+  ClipboardText,
 } from "@phosphor-icons/react/dist/ssr";
 import { Card, Badge, PageHeader, PrimaryButton, GhostButton } from "@/components/kit";
 import { MathText } from "@/components/MathText";
@@ -50,6 +51,7 @@ import { flashcards } from "@/lib/data/flashcards";
 import { chapters, sectionTaughtOn } from "@/lib/data/chapters";
 import { lessons } from "@/lib/data/lessons";
 import { useReview } from "@/lib/useReview";
+import { buildReport, chaptersWithData, type SessionItem } from "@/lib/report";
 import {
   buildSession,
   readiness,
@@ -124,7 +126,11 @@ export default function SessionPage() {
   const [left, setLeft] = useState(READ_SECONDS);
 
   const [elapsed, setElapsed] = useState(0);
-  const [log, setLog] = useState<{ ok: boolean; late: boolean; conf: number }[]>([]);
+  const [log, setLog] = useState<SessionItem[]>([]);
+  const [reportScope, setReportScope] = useState<number | "all">("all");
+  const [copied, setCopied] = useState(false);
+  const itemStart = useRef<number>(Date.now());
+  const skippedHold = useRef(false);
   const [done, setDone] = useState(false);
   const started = useRef<number>(Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +182,8 @@ export default function SessionPage() {
     setResult(null);
     setLocked(m.kind === "rule");
     setLeft(READ_SECONDS);
+    itemStart.current = Date.now();
+    skippedHold.current = false;
     if (m.kind === "practice" && m.problem.kind === "numeric") {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -200,9 +208,24 @@ export default function SessionPage() {
 
   function submit(ok: boolean) {
     if (!live || conf === null || result !== null) return;
+    const seconds = Math.round((Date.now() - itemStart.current) / 1000);
     setResult(ok);
     record(live.kind as ItemKind, live.id, { correct: ok, confidence: conf }, today);
-    setLog((l) => [...l, { ok, late: overBudget, conf }]);
+    setLog((l) => [
+      ...l,
+      {
+        kind: live.kind,
+        id: live.id,
+        ch: live.ch,
+        ok,
+        conf,
+        seconds,
+        // Rushed means a rule item answered without letting the hold run out,
+        // and inside the window where the diagnostic showed reading failures.
+        rushed: live.kind === "rule" && skippedHold.current && seconds < READ_SECONDS + 6,
+        late: overBudget,
+      },
+    ]);
   }
 
   function checkNumeric() {
@@ -307,6 +330,33 @@ export default function SessionPage() {
     );
   }
 
+  const reportText = done
+    ? buildReport(candidates, today, reportScope, log)
+    : "";
+
+  function copyReport() {
+    const done2 = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(reportText).then(done2).catch(fallback);
+    } else fallback();
+    function fallback() {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = reportText;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        done2();
+      } catch {
+        /* the textarea below is selectable by hand */
+      }
+    }
+  }
+
   // End screen
   if (done) {
     const early = log.filter((l) => !l.late);
@@ -354,6 +404,58 @@ export default function SessionPage() {
               correct days rather than three, because confident errors come back about a week later.
             </p>
           )}
+        </Card>
+
+        <Card className="mt-6 p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="font-bold">Ask Claude where you are falling down</h3>
+            <span className="text-xs text-[#9aa1b2]">paste this into a chat</span>
+          </div>
+          <p className="mt-1.5 text-sm leading-relaxed text-[#9aa1b2]">
+            Every topic here is tracked twice, once for whether you can identify the method and
+            once for whether you can execute it. The report splits your losses along that line,
+            which is the thing no screen in this app shows you.
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setReportScope("all")}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                reportScope === "all"
+                  ? "border-warn/60 bg-warn/15 text-warn"
+                  : "border-border bg-panel2 text-[#9aa1b2] hover:border-white/30"
+              }`}
+            >
+              Everything
+            </button>
+            {chaptersWithData(candidates).map((c) => (
+              <button
+                key={c}
+                onClick={() => setReportScope(c)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  reportScope === c
+                    ? "border-warn/60 bg-warn/15 text-warn"
+                    : "border-border bg-panel2 text-[#9aa1b2] hover:border-white/30"
+                }`}
+              >
+                Ch {c}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <PrimaryButton onClick={copyReport} className="flex w-full items-center justify-center gap-2">
+              <ClipboardText size={18} weight="bold" />
+              {copied ? "Copied, paste it into a chat" : "Copy the report"}
+            </PrimaryButton>
+          </div>
+
+          <textarea
+            readOnly
+            value={reportText}
+            onFocus={(e) => e.currentTarget.select()}
+            className="mt-3 h-40 w-full resize-y rounded-xl border border-border bg-panel2 p-3 font-mono text-[11px] leading-relaxed text-[#9aa1b2] outline-none"
+          />
         </Card>
 
         <div className="mt-6 flex justify-center gap-3">
@@ -450,7 +552,12 @@ export default function SessionPage() {
                     Read it first. Options in{" "}
                     <span className="font-mono font-bold text-warn">{left}</span>.
                     <div className="mt-3">
-                      <GhostButton onClick={() => setLocked(false)}>
+                      <GhostButton
+                        onClick={() => {
+                          skippedHold.current = true;
+                          setLocked(false);
+                        }}
+                      >
                         <span className="flex items-center gap-1.5">
                           <Eye size={16} weight="bold" /> I have read it
                         </span>
