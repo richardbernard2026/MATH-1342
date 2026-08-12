@@ -5,9 +5,18 @@ import { ArrowCounterClockwise } from "@phosphor-icons/react/dist/ssr";
 import { Card, Badge, PageHeader, GhostButton, chipActive } from "@/components/kit";
 import { MathText } from "@/components/MathText";
 import { flashcards, type Flashcard } from "@/lib/data/flashcards";
+import { chapters } from "@/lib/data/chapters";
 import { shuffle } from "@/lib/math";
 
 const STORAGE_KEY = "statlab_srs_v1";
+
+/**
+ * One chip per chapter the course has, read from the course data.
+ *
+ * This was a literal 1 to 6, which left every Chapter 7, 8 and 10 card with no
+ * way to reach it from this page.
+ */
+const PICKER_CHAPTERS: number[] = chapters.map((c) => c.num);
 
 /**
  * Leitner spaced repetition.
@@ -110,7 +119,7 @@ export default function FlashcardsPage() {
         >
           All
         </button>
-        {[1, 2, 3, 4, 5, 6].map((c) => (
+        {PICKER_CHAPTERS.map((c) => (
           <button
             key={c}
             onClick={() => setFilter(c)}

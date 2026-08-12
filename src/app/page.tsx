@@ -17,7 +17,7 @@ import {
   Warning,
 } from "@phosphor-icons/react/dist/ssr";
 
-import { chapters, examScopes } from "@/lib/data/chapters";
+import { chapterRangeLabel, chapters, examScopes } from "@/lib/data/chapters";
 import { flashcards } from "@/lib/data/flashcards";
 import { lessons } from "@/lib/data/lessons";
 import { useNextUp, useProfile, useStudyStats } from "@/lib/useProfile";
@@ -30,7 +30,9 @@ import {
   SpotlightCard,
 } from "@/components/fx";
 
-/* Hex values mirror tailwind.config.ts; SVG strokes cannot use Tailwind names. */
+/* Hex values mirror tailwind.config.ts; SVG strokes cannot use Tailwind names.
+ * Every chapter in `chapters` needs an entry here or its ring draws colourless,
+ * which is what happened to 7, 8 and 10. */
 const CH_HEX: Record<number, string> = {
   1: "#22d3ee",
   2: "#f472b6",
@@ -38,7 +40,15 @@ const CH_HEX: Record<number, string> = {
   4: "#4f8fff",
   5: "#b46fef",
   6: "#ff9f43",
+  7: "#2dd4bf",
+  8: "#818cf8",
+  10: "#e879f9",
 };
+
+/** Fall back to a readable colour rather than drawing nothing. */
+function chHex(num: number): string {
+  return CH_HEX[num] ?? "#4f8fff";
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -115,7 +125,7 @@ export default function HomePage() {
         <div className="fadein relative">
           <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-panel2/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-[#9aa1b2]">
             <Lightning size={12} weight="fill" className="text-warn" />
-            MATH 1342 &middot; Chapters 1&ndash;6
+            MATH 1342 &middot; Chapters {chapterRangeLabel()}
           </div>
 
           <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
@@ -293,13 +303,13 @@ export default function HomePage() {
               accPct === null ? "" : accPct >= 80 ? "#35c98f" : accPct >= 60 ? "#ffd166" : "#ff5d5d";
             return (
               <Link key={c.num} href={`/chapter/${c.num}`} className="fadein block">
-                <SpotlightCard className="h-full p-5" glow={CH_HEX[c.num]}>
+                <SpotlightCard className="h-full p-5" glow={chHex(c.num)}>
                   <div className="flex items-start gap-4">
                     <ProgressRing
                       pct={pct}
                       size={62}
                       stroke={6}
-                      color={CH_HEX[c.num]}
+                      color={chHex(c.num)}
                       label={<span className="text-sm">{c.num}</span>}
                     />
                     <div className="min-w-0 flex-1">
@@ -332,7 +342,7 @@ export default function HomePage() {
       {/* --------------------------------------------------------- exam prep */}
       <section>
         <SectionTitle>Exam readiness</SectionTitle>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {examScopes.map((s) => {
             const taken = stats.exams.filter((e) => e.scope === s.key && e.total > 0);
             const best = taken.length

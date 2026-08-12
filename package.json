@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "check:data": "node scripts/check-course-data.mjs",
+    "build": "node scripts/check-course-data.mjs && next build",
     "start": "next start",
     "lint": "next lint"
   },

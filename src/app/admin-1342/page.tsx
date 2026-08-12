@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Card, PageHeader, PrimaryButton, barFill } from "@/components/kit";
+import { examScopes } from "@/lib/data/chapters";
 import { Lock } from "@phosphor-icons/react/dist/ssr";
 
 /**
@@ -43,11 +44,15 @@ type Exam = {
 
 type ChapterStat = { chapter: number; attempted: number; correct: number };
 
-const SCOPE_LABEL: Record<string, string> = {
-  t1: "Test 1 (Ch 1-3)",
-  t2: "Test 2 (Ch 4-6)",
-  cum: "Cumulative",
-};
+/**
+ * Exam names, taken from the course data.
+ *
+ * Written out by hand this listed t1, t2 and cum only, so every Test 3 attempt
+ * showed up in the table as the raw key "t3".
+ */
+const SCOPE_LABEL: Record<string, string> = Object.fromEntries(
+  examScopes.map((s) => [s.key, s.label])
+);
 
 export default function AdminPage() {
   const [secret, setSecret] = useState("");

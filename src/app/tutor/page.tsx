@@ -6,6 +6,7 @@ import { PaperPlaneRight, Sparkle, Student } from "@phosphor-icons/react/dist/ss
 import { PageHeader, Badge } from "@/components/kit";
 import { MathText } from "@/components/MathText";
 import { getLesson } from "@/lib/data/lessons";
+import { chapterRangeLabel } from "@/lib/data/chapters";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -112,7 +113,7 @@ function TutorInner() {
           sub={
             lesson
               ? `Scoped to section ${lesson.id}. It has this section's actual material in front of it.`
-              : "Ask anything from Chapters 1 through 6."
+              : `Ask anything from Chapters ${chapterRangeLabel()}.`
           }
         />
         <div className="flex shrink-0 gap-1 rounded-xl border border-border bg-panel2 p-1">

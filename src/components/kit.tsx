@@ -10,6 +10,7 @@ import {
   ChatCircleDots,
   Timer,
   Books,
+  CalendarCheck,
 } from "@phosphor-icons/react/dist/ssr";
 
 /* ---------------------------------------------------------------- primitives */
@@ -34,6 +35,9 @@ const badgeStyles: Record<number, string> = {
   4: "bg-ch4/10 text-ch4 border-ch4/40",
   5: "bg-ch5/10 text-ch5 border-ch5/40",
   6: "bg-ch6/10 text-ch6 border-ch6/40",
+  7: "bg-ch7/10 text-ch7 border-ch7/40",
+  8: "bg-ch8/10 text-ch8 border-ch8/40",
+  10: "bg-ch10/10 text-ch10 border-ch10/40",
 };
 
 export const chipActive: Record<number, string> = {
@@ -43,6 +47,9 @@ export const chipActive: Record<number, string> = {
   4: "border-ch4 bg-ch4/10 text-ch4",
   5: "border-ch5 bg-ch5/10 text-ch5",
   6: "border-ch6 bg-ch6/10 text-ch6",
+  7: "border-ch7 bg-ch7/10 text-ch7",
+  8: "border-ch8 bg-ch8/10 text-ch8",
+  10: "border-ch10 bg-ch10/10 text-ch10",
 };
 
 export const barFill: Record<number, string> = {
@@ -52,6 +59,9 @@ export const barFill: Record<number, string> = {
   4: "bg-ch4",
   5: "bg-ch5",
   6: "bg-ch6",
+  7: "bg-ch7",
+  8: "bg-ch8",
+  10: "bg-ch10",
 };
 
 export const textCh: Record<number, string> = {
@@ -61,6 +71,9 @@ export const textCh: Record<number, string> = {
   4: "text-ch4",
   5: "text-ch5",
   6: "text-ch6",
+  7: "text-ch7",
+  8: "text-ch8",
+  10: "text-ch10",
 };
 
 export const borderCh: Record<number, string> = {
@@ -70,6 +83,9 @@ export const borderCh: Record<number, string> = {
   4: "border-ch4/40",
   5: "border-ch5/40",
   6: "border-ch6/40",
+  7: "border-ch7/40",
+  8: "border-ch8/40",
+  10: "border-ch10/40",
 };
 
 export const gradCh: Record<number, string> = {
@@ -79,6 +95,9 @@ export const gradCh: Record<number, string> = {
   4: "from-ch4/20",
   5: "from-ch5/20",
   6: "from-ch6/20",
+  7: "from-ch7/20",
+  8: "from-ch8/20",
+  10: "from-ch10/20",
 };
 
 export function Badge({ ch, children }: { ch: number; children: React.ReactNode }) {
@@ -153,6 +172,7 @@ export function GhostButton({
 /* -------------------------------------------------------------------- navbar */
 
 const links = [
+  { href: "/session", label: "Today", icon: CalendarCheck },
   { href: "/", label: "Home", icon: Books },
   { href: "/formula", label: "Which Formula?", icon: TreeStructure },
   { href: "/practice", label: "Practice", icon: Brain },

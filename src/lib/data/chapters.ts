@@ -109,6 +109,36 @@ export function getChapter(num: number) {
   return chapters.find((c) => c.num === num);
 }
 
+/**
+ * The chapters this course covers, written the way a person would say it:
+ * "1-8, 10". Contiguous numbers collapse into a run and gaps are preserved,
+ * because the course skips Chapter 9.
+ *
+ * Anywhere the site names its own scope should call this rather than spell out
+ * a range, which is how "Chapters 1-6" survived three chapters past being true.
+ */
+export function chapterRangeLabel(nums: number[] = chapters.map((c) => c.num)): string {
+  const sorted = [...nums].sort((a, b) => a - b);
+  if (sorted.length === 0) return "";
+
+  const runs: string[] = [];
+  let start = sorted[0];
+  let prev = sorted[0];
+  const flush = () => runs.push(start === prev ? `${start}` : `${start}-${prev}`);
+
+  for (const n of sorted.slice(1)) {
+    if (n === prev + 1 || n === prev) {
+      prev = n;
+      continue;
+    }
+    flush();
+    start = n;
+    prev = n;
+  }
+  flush();
+  return runs.join(", ");
+}
+
 /** Which chapters each exam covers, per the course calendar. */
 export const examScopes = [
   { key: "t1", label: "Test 1 (Ch 1-3)", chapters: [1, 2, 3] },

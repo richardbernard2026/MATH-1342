@@ -14,9 +14,28 @@ import {
   cleanClientId,
   pastTimestamp,
 } from "@/lib/db";
+import { chapters } from "@/lib/data/chapters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Every chapter the course actually has, taken from the course data rather
+ * than written out here.
+ *
+ * The numbers are not contiguous (there is no Chapter 9), so a range check
+ * cannot stand in for this list, and an earlier hardcoded 1 to 6 quietly threw
+ * away every practice attempt and exam breakdown for Chapters 7, 8 and 10.
+ */
+const CHAPTER_NUMS: number[] = chapters.map((c) => c.num);
+
+/** A chapter number that exists in the course, or null. */
+function chapterNumber(v: unknown): number | null {
+  const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
+  if (!Number.isFinite(n)) return null;
+  const r = Math.round(n);
+  return CHAPTER_NUMS.includes(r) ? r : null;
+}
 
 /**
  * Record study activity against a profile.
@@ -84,7 +103,7 @@ export async function POST(req: Request) {
 
     /* ----------------------------------------------------------- practice */
     if (kind === "practice") {
-      const chapter = boundedInt(body?.chapter, 1, 6);
+      const chapter = chapterNumber(body?.chapter);
       const correct = body?.correct === true ? 1 : 0;
       if (chapter === null) {
         return Response.json({ ok: false, error: "invalid chapter" }, { status: 400 });
@@ -119,7 +138,7 @@ export async function POST(req: Request) {
       // shape, so only clean numbers reach the JSONB column.
       const raw = body?.breakdown ?? {};
       const breakdown: Record<string, { correct: number; total: number }> = {};
-      for (const ch of [1, 2, 3, 4, 5, 6]) {
+      for (const ch of CHAPTER_NUMS) {
         const entry = raw?.[ch];
         if (!entry) continue;
         const c = boundedInt(entry.correct, 0, 200);
@@ -162,7 +181,9 @@ export async function POST(req: Request) {
     if (kind === "backfill") {
       const queries = [];
 
-      const sections = Array.isArray(body?.sections) ? body.sections.slice(0, 40) : [];
+      const sections = Array.isArray(body?.sections)
+        ? body.sections.slice(0, ALLOWED_SECTIONS.length)
+        : [];
       for (const s of sections) {
         if (!isAllowed(s?.sectionId, ALLOWED_SECTIONS)) continue;
         queries.push(sql`
@@ -181,9 +202,11 @@ export async function POST(req: Request) {
         `);
       }
 
-      const practice = Array.isArray(body?.practice) ? body.practice.slice(0, 6) : [];
+      const practice = Array.isArray(body?.practice)
+        ? body.practice.slice(0, CHAPTER_NUMS.length)
+        : [];
       for (const p of practice) {
-        const chapter = strictInt(p?.chapter, 1, 6);
+        const chapter = chapterNumber(p?.chapter);
         const attempted = strictInt(p?.attempted, 0, 100000);
         const correct = strictInt(p?.correct, 0, 100000);
         if (chapter === null || attempted === null || correct === null) continue;
@@ -223,7 +246,7 @@ export async function POST(req: Request) {
 
         const rawB = e?.breakdown ?? {};
         const bd: Record<string, { correct: number; total: number }> = {};
-        for (const ch of [1, 2, 3, 4, 5, 6]) {
+        for (const ch of CHAPTER_NUMS) {
           const entry = rawB?.[ch];
           if (!entry) continue;
           const c = boundedInt(entry.correct, 0, 200);

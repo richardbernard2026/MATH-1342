@@ -158,8 +158,14 @@ export function isMissingTable(err: unknown): boolean {
   return /relation .* does not exist/i.test(safeErrorMessage(err));
 }
 
-/** Exam scopes that may be written to exam_results. */
-export const ALLOWED_SCOPES = ["t1", "t2", "cum"] as const;
+/**
+ * Exam scopes that may be written to exam_results.
+ *
+ * Must contain exactly the keys of `examScopes` in src/lib/data/chapters.ts.
+ * See the note on ALLOWED_SECTIONS for why these are literals and how they are
+ * kept honest.
+ */
+export const ALLOWED_SCOPES = ["t1", "t2", "t3", "cum"] as const;
 
 /**
  * Item kinds that may be written to review_state.
@@ -171,7 +177,21 @@ export const ALLOWED_SCOPES = ["t1", "t2", "cum"] as const;
  */
 export const ALLOWED_ITEM_KINDS = ["rule", "practice", "card"] as const;
 
-/** Valid section ids, so section_progress can never hold junk. */
+/**
+ * Valid section ids, so section_progress can never hold junk.
+ *
+ * This is a literal copy of every section id in src/lib/data/chapters.ts, not
+ * an import of it. db.ts is server-only and is pulled into every API bundle,
+ * and importing course data here would drag the lesson, question and generator
+ * modules along with it for the sake of a list of strings.
+ *
+ * A copy can go stale, which is exactly what happened when Chapters 7, 8 and 10
+ * were added: writes for 7.1 through 10.2 were rejected and nobody noticed. So
+ * the copy is now checked mechanically. scripts/check-course-data.mjs asserts
+ * that this list and ALLOWED_SCOPES match chapters.ts exactly, and it runs as
+ * the first step of `npm run build`, so adding a chapter without updating this
+ * file fails the build instead of silently dropping progress.
+ */
 export const ALLOWED_SECTIONS = [
   "1.1", "1.2",
   "2.1", "2.2", "2.3",
@@ -179,6 +199,9 @@ export const ALLOWED_SECTIONS = [
   "4.1", "4.2", "4.3",
   "5.1", "5.2", "5.3",
   "6.1", "6.2", "6.3",
+  "7.1", "7.2", "7.3",
+  "8.1", "8.2", "8.3",
+  "10.1", "10.2",
 ] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
