@@ -49,7 +49,8 @@ import { Card, Badge, PageHeader, PrimaryButton, GhostButton, StreakBadge } from
 import { buildCandidates } from "@/lib/useMastery";
 import { MathText } from "@/components/MathText";
 import { generateProblem, topicsByChapter, type PracticeProblem } from "@/lib/practiceGenerators";
-import { ruleFor, optionsFor } from "@/lib/data/ruleChoices";
+import { ruleFor } from "@/lib/data/ruleChoices";
+import { formulaFor, formulaOptionsFor, type FormulaCard } from "@/lib/data/formulas";
 import { flashcards } from "@/lib/data/flashcards";
 import { chapters, sectionTaughtOn } from "@/lib/data/chapters";
 import { lessons } from "@/lib/data/lessons";
@@ -81,17 +82,37 @@ const chOf = (key: string) =>
   );
 
 type Live =
-  | { kind: "rule"; id: string; ch: number; prompt: string; options: string[]; answer: number; why: string }
+  | {
+      kind: "rule";
+      id: string;
+      ch: number;
+      /** The real generated problem. Both stages act on THIS problem. */
+      problem: PracticeProblem;
+      options: FormulaCard[];
+      answer: number;
+      correct: FormulaCard;
+      why: string;
+    }
   | { kind: "practice"; id: string; ch: number; problem: PracticeProblem }
   | { kind: "card"; id: string; ch: number; front: string; back: string; why: string };
 
 function materialize(s: Scored): Live | null {
   if (s.kind === "rule") {
     const rc = ruleFor(s.id);
-    const opts = optionsFor(s.id, 3);
-    if (!rc || !opts) return null;
+    const card = formulaFor(s.id);
+    const opts = formulaOptionsFor(s.id, 3);
+    if (!rc || !card || !opts) return null;
     const p = generateProblem(chOf(s.id), s.id);
-    return { kind: "rule", id: s.id, ch: rc.ch, prompt: p.prompt, options: opts.options, answer: opts.answer, why: rc.why };
+    return {
+      kind: "rule",
+      id: s.id,
+      ch: rc.ch,
+      problem: p,
+      options: opts.options,
+      answer: opts.answer,
+      correct: card,
+      why: rc.why,
+    };
   }
   if (s.kind === "practice") {
     const p = generateProblem(chOf(s.id), s.id);
@@ -134,6 +155,16 @@ export default function SessionPage() {
   const [reportScope, setReportScope] = useState<number | "all">("all");
   const [copied, setCopied] = useState(false);
   const [scaffold, setScaffold] = useState<PracticeProblem | null>(null);
+  /**
+   * Formula items run in two stages on the SAME problem: pick the formula,
+   * then compute with it. Picking wrong does not end the item; the correct
+   * formula is shown and stage two still runs, so a miss teaches the formula
+   * rather than just scoring one. Stage one records against the "rule" half,
+   * stage two against the "practice" half, which keeps the report's
+   * identify-versus-execute split intact.
+   */
+  const [stage, setStage] = useState<1 | 2>(1);
+  const [stage1Ok, setStage1Ok] = useState<boolean | null>(null);
   const itemStart = useRef<number>(Date.now());
   const skippedHold = useRef(false);
   const [done, setDone] = useState(false);
@@ -178,6 +209,8 @@ export default function SessionPage() {
     setResult(null);
     setLocked(m.kind === "rule");
     setLeft(READ_SECONDS);
+    setStage(1);
+    setStage1Ok(null);
     itemStart.current = Date.now();
     skippedHold.current = false;
 
@@ -214,6 +247,41 @@ export default function SessionPage() {
 
   const overBudget = elapsed > BUDGET_MINUTES * 60;
 
+  /** Stage one of a formula item: which formula does this problem call for. */
+  function submitFormula(i: number) {
+    if (!live || live.kind !== "rule" || conf === null || stage1Ok !== null) return;
+    const ok = i === live.answer;
+    const seconds = Math.round((Date.now() - itemStart.current) / 1000);
+    setPicked(i);
+    setStage1Ok(ok);
+    record("rule", live.id, { correct: ok, confidence: conf }, today);
+    setLog((l) => [
+      ...l,
+      {
+        kind: "rule",
+        id: live.id,
+        ch: live.ch,
+        ok,
+        conf,
+        seconds,
+        rushed: skippedHold.current && seconds < READ_SECONDS + 6,
+        late: overBudget,
+      },
+    ]);
+  }
+
+  /** Stage two: compute the answer to the same problem using that formula. */
+  function submitComputed(ok: boolean) {
+    if (!live || live.kind !== "rule" || result !== null) return;
+    const seconds = Math.round((Date.now() - itemStart.current) / 1000);
+    setResult(ok);
+    record("practice", live.id, { correct: ok, confidence: conf ?? 1 }, today);
+    setLog((l) => [
+      ...l,
+      { kind: "practice", id: live.id, ch: live.ch, ok, conf: conf ?? 1, seconds, rushed: false, late: overBudget },
+    ]);
+  }
+
   function submit(ok: boolean) {
     if (!live || conf === null || result !== null) return;
     const seconds = Math.round((Date.now() - itemStart.current) / 1000);
@@ -237,7 +305,13 @@ export default function SessionPage() {
   }
 
   function checkNumeric() {
-    if (!live || live.kind !== "practice" || conf === null) return;
+    if (!live || conf === null) return;
+    if (live.kind === "rule") {
+      const v = parseFloat(value);
+      const ok = !Number.isNaN(v) && Math.abs(v - live.problem.answer) <= live.problem.tol;
+      return submitComputed(ok);
+    }
+    if (live.kind !== "practice") return;
     const v = parseFloat(value);
     submit(!Number.isNaN(v) && Math.abs(v - live.problem.answer) <= live.problem.tol);
   }
@@ -520,7 +594,13 @@ export default function SessionPage() {
         <Card className="p-6">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge ch={live.ch}>
-              {live.kind === "rule" ? "Which method" : live.kind === "card" ? "Recall" : "Work it"}
+              {live.kind === "rule"
+                ? stage === 1
+                  ? "Pick the formula"
+                  : "Now use it"
+                : live.kind === "card"
+                  ? "Recall"
+                  : "Work it"}
             </Badge>
             {current?.reason && (
               <span className="text-xs font-semibold text-[#9aa1b2]">{current.reason}</span>
@@ -533,7 +613,13 @@ export default function SessionPage() {
           </div>
 
           <div className="text-lg leading-relaxed">
-            <MathText>{live.kind === "card" ? live.front : live.kind === "rule" ? live.prompt : live.problem.prompt}</MathText>
+                  <MathText>
+              {live.kind === "card"
+                ? live.front
+                : live.kind === "rule"
+                  ? live.problem.prompt
+                  : live.problem.prompt}
+            </MathText>
           </div>
 
           {scaffold && result === null && (
@@ -598,7 +684,7 @@ export default function SessionPage() {
               {live.kind === "rule" && (
                 locked ? (
                   <div className="mt-5 rounded-xl border border-border bg-panel2 p-5 text-center text-sm text-[#9aa1b2]">
-                    Read it first. Options in{" "}
+                    Read it first. Formulas appear in{" "}
                     <span className="font-mono font-bold text-warn">{left}</span>.
                     <div className="mt-3">
                       <GhostButton
@@ -614,29 +700,122 @@ export default function SessionPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-5 flex flex-col gap-2.5">
-                    {live.options.map((o, i) => {
-                      let cls = "border-border bg-panel2 hover:border-white/40";
-                      if (result !== null) {
-                        if (i === live.answer) cls = "border-good/60 bg-good/10 text-good";
-                        else if (i === picked) cls = "border-bad/60 bg-bad/10 text-bad";
-                        else cls = "border-border bg-panel2 opacity-50";
-                      }
-                      return (
-                        <button
-                          key={i}
-                          disabled={result !== null}
-                          onClick={() => {
-                            setPicked(i);
-                            submit(i === live.answer);
-                          }}
-                          className={`rounded-xl border px-4 py-3 text-left text-sm font-medium leading-relaxed transition-colors disabled:cursor-default ${cls}`}
-                        >
-                          <MathText>{o}</MathText>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <>
+                    {/* Stage one: which formula does this problem call for */}
+                    <div className="mt-5 flex flex-col gap-2.5">
+                      {live.options.map((card, i) => {
+                        let cls = "border-border bg-panel2 hover:border-white/40";
+                        if (stage1Ok !== null) {
+                          if (i === live.answer) cls = "border-good/60 bg-good/10";
+                          else if (i === picked) cls = "border-bad/60 bg-bad/10";
+                          else cls = "border-border bg-panel2 opacity-40";
+                        }
+                        return (
+                          <button
+                            key={card.key}
+                            disabled={stage1Ok !== null}
+                            onClick={() => submitFormula(i)}
+                            className={`rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-default ${cls}`}
+                          >
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                              <span className="text-sm font-bold">{card.name}</span>
+                              <span className="font-serif text-base">
+                                <MathText>{`$${card.latex}$`}</MathText>
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs text-[#9aa1b2]">{card.plain}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bridge into stage two. A wrong pick still gets the formula. */}
+                    {stage1Ok !== null && stage === 1 && (
+                      <div
+                        className={`fadein mt-4 rounded-xl border p-4 ${
+                          stage1Ok ? "border-good/40 bg-good/10" : "border-bad/40 bg-bad/10"
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {stage1Ok ? (
+                            <CheckCircle size={22} weight="fill" className="mt-0.5 shrink-0 text-good" />
+                          ) : (
+                            <XCircle size={22} weight="fill" className="mt-0.5 shrink-0 text-bad" />
+                          )}
+                          <div className="text-sm">
+                            <div className={`font-bold ${stage1Ok ? "text-good" : "text-bad"}`}>
+                              {stage1Ok ? "Right formula." : "Not that one. Here is the one you need."}
+                            </div>
+                            <div className="mt-2 rounded-lg border border-border bg-panel2 p-3">
+                              <div className="text-sm font-bold">{live.correct.name}</div>
+                              <div className="my-1.5 font-serif text-lg">
+                                <MathText>{`$${live.correct.latex}$`}</MathText>
+                              </div>
+                              <div className="text-xs italic text-[#9aa1b2]">{live.correct.note}</div>
+                            </div>
+                            <div className="mt-2 leading-relaxed text-[#9aa1b2]">{live.why}</div>
+                          </div>
+                        </div>
+                        <div className="mt-4">
+                          <PrimaryButton onClick={() => setStage(2)} className="w-full">
+                            Now solve it with this formula
+                          </PrimaryButton>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stage two: compute the answer to the SAME problem */}
+                    {stage === 2 && (
+                      <div className="fadein mt-4">
+                        <div className="rounded-xl border border-accent/40 bg-accent/5 p-3">
+                          <div className="text-xs font-bold uppercase tracking-wide text-accent">
+                            Use this
+                          </div>
+                          <div className="mt-1 font-serif text-lg">
+                            <MathText>{`$${live.correct.latex}$`}</MathText>
+                          </div>
+                        </div>
+
+                        {live.problem.kind === "choice" ? (
+                          <div className="mt-4 flex flex-col gap-2.5">
+                            {(live.problem.choices || []).map((o, i) => {
+                              let cls = "border-border bg-panel2 hover:border-white/40";
+                              if (result !== null) {
+                                if (i === live.problem.answer) cls = "border-good/60 bg-good/10 text-good";
+                                else cls = "border-border bg-panel2 opacity-50";
+                              }
+                              return (
+                                <button
+                                  key={i}
+                                  disabled={result !== null}
+                                  onClick={() => submitComputed(i === live.problem.answer)}
+                                  className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors disabled:cursor-default ${cls}`}
+                                >
+                                  <MathText>{o}</MathText>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={value}
+                              disabled={result !== null}
+                              onChange={(e) => setValue(e.target.value)}
+                              onKeyDown={(e) => e.key === "Enter" && checkNumeric()}
+                              placeholder="Your answer"
+                              className="w-full flex-1 rounded-xl border border-border bg-panel2 px-4 py-2.5 text-sm outline-none focus:border-white/50 disabled:opacity-60"
+                            />
+                            <PrimaryButton onClick={checkNumeric} disabled={result !== null || !value.trim()}>
+                              Check
+                            </PrimaryButton>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )
               )}
 
@@ -737,7 +916,25 @@ export default function SessionPage() {
                   )}
                 </div>
                 {live.kind === "rule" && (
-                  <div className="mt-1.5 leading-relaxed text-[#9aa1b2]">{live.why}</div>
+                  <>
+                    {!result && (
+                      <div className="mt-1 text-[#9aa1b2]">
+                        Correct answer:{" "}
+                        <span className="font-mono text-warn">
+                          {live.problem.kind === "choice"
+                            ? (live.problem.choices || [])[live.problem.answer]
+                            : live.problem.answer}
+                        </span>
+                      </div>
+                    )}
+                    <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-relaxed text-[#9aa1b2]">
+                      {live.problem.steps.map((st, i) => (
+                        <li key={i}>
+                          <MathText>{st}</MathText>
+                        </li>
+                      ))}
+                    </ol>
+                  </>
                 )}
                 {live.kind === "practice" && (
                   <>

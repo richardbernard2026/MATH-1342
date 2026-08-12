@@ -328,7 +328,10 @@ export function scoreCandidate(c: Candidate, today: string, session: SessionKind
  * which is past the point the diagnostic showed accuracy falling apart.
  */
 export const MINUTES_PER_ITEM: Record<ItemKind, number> = {
-  rule: 0.6,
+  // A "rule" item is no longer a single tap. It now runs two stages on the
+  // same problem, pick the formula and then compute with it, so it costs
+  // roughly what a practice item costs plus the formula choice.
+  rule: 2.5,
   card: 0.4,
   practice: 2.2,
 };
@@ -421,11 +424,12 @@ export function buildSession(
   // cap is what makes the alternation actually achievable.
   const sectionCap = minutes * 0.4;
 
-  // A count cap as well as a time cap. Rule items cost 0.6 minutes, so 40% of
-  // the time budget is still sixteen of them, which is most of a session from
-  // one chapter. Alternation is only possible if no chapter holds more than
-  // about half the items, and four is comfortably under that.
-  const COUNT_CAP = 4;
+  // A count cap as well as a time cap, scaled to how many items the session
+  // will actually hold. A flat cap of four was fine at eighteen items but
+  // collapses a ten item session onto three chapters, which quietly undoes the
+  // interleaving. Roughly a quarter of the session per chapter, never below 2.
+  const expectedItems = Math.max(4, Math.round(minutes / 2.4));
+  const COUNT_CAP = Math.max(2, Math.min(4, Math.round(expectedItems / 4)));
 
   // Warm-ups are rebuilt objects rather than the ones in `eligible`, so an
   // identity check missed them and the same item could be served twice in one
@@ -435,6 +439,11 @@ export function buildSession(
 
   const take = (c: Scored, cap: number, countCap: number, allowHard = true) => {
     if (seenAlready(c)) return false;
+    // A formula item runs both stages on one problem and records the rule half
+    // AND the practice half. Scheduling the standalone practice item for the
+    // same topic in the same session would just be the same work twice.
+    if (c.kind === "practice" && chosen.has("rule:" + c.id)) return false;
+    if (c.kind === "rule" && chosen.has("practice:" + c.id)) return false;
     const cost = MINUTES_PER_ITEM[c.kind];
     if (spent + cost > minutes) return false;
     const used = perSection.get(c.section) ?? 0;
