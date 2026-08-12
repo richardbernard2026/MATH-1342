@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { NavBar } from "@/components/kit";
 import { ProfileProvider } from "@/lib/useProfile";
+import { ReviewProvider } from "@/lib/useReview";
 import { NameGate } from "@/components/NameGate";
 
 export const metadata: Metadata = {
@@ -14,10 +15,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen bg-bg text-[#e8eaf0] antialiased">
+        {/* ReviewProvider sits inside ProfileProvider because it reuses the
+            uuid that profile keeps in localStorage rather than minting its
+            own, and a second id would split one person across two profiles. */}
         <ProfileProvider>
-          <NavBar />
-          <main className="mx-auto max-w-6xl px-4 pb-24 pt-6">{children}</main>
-          <NameGate />
+          <ReviewProvider>
+            <NavBar />
+            <main className="mx-auto max-w-6xl px-4 pb-24 pt-6">{children}</main>
+            <NameGate />
+          </ReviewProvider>
         </ProfileProvider>
       </body>
     </html>

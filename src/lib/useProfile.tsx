@@ -77,7 +77,14 @@ function newClientId(): string {
   return randomId();
 }
 
-function getUuid(): string {
+/**
+ * The browser's identity, minted once and kept forever.
+ *
+ * Exported so other stores (useReview) attach to the SAME id rather than
+ * generating a second one, which would split one person's data across two
+ * profiles that can never be reconciled.
+ */
+export function getUuid(): string {
   if (typeof window === "undefined") return "";
   let id = window.localStorage.getItem(UUID_KEY);
   if (!id) {

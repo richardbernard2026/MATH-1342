@@ -81,12 +81,50 @@ ALTER TABLE exam_results ADD COLUMN IF NOT EXISTS client_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_client
   ON exam_results(profile_id, client_id) WHERE client_id IS NOT NULL;
 
+-- ------------------------------------------------------------- review state
+-- One row per person per reviewable item, holding the spaced-repetition state
+-- from src/lib/scheduler.ts. item_kind is one of 'rule', 'practice' or 'card'
+-- and item_id is the id of the rule choice, practice topic or flashcard.
+--
+-- correct_days is the list of distinct calendar dates the item was recalled
+-- correctly on, which is what the retirement criterion counts. It is JSONB
+-- rather than TEXT[] so it serialises exactly the way the browser stores it,
+-- with no array literal quoting to get wrong on either side.
+--
+-- due_on and last_seen are DATE, not TIMESTAMPTZ. The scheduler thinks in
+-- whole calendar days, and a timestamp would drag a timezone into a value
+-- that has no time of day.
+--
+-- The UNIQUE key is what makes a write idempotent. The API upserts on it and
+-- keeps whichever side has more attempts, so replaying the same sync twice,
+-- or syncing from two tabs, cannot invent progress or lose it.
+CREATE TABLE IF NOT EXISTS review_state (
+  id            SERIAL PRIMARY KEY,
+  profile_id    INTEGER REFERENCES profiles(id) ON DELETE CASCADE,
+  item_kind     TEXT NOT NULL,
+  item_id       TEXT NOT NULL,
+  streak        INTEGER DEFAULT 0,
+  correct_days  JSONB   DEFAULT '[]'::jsonb,
+  attempts      INTEGER DEFAULT 0,
+  corrects      INTEGER DEFAULT 0,
+  sure_wrong    BOOLEAN DEFAULT false,
+  due_on        DATE,
+  last_seen     DATE,
+  retired       BOOLEAN DEFAULT false,
+  updated_at    TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (profile_id, item_kind, item_id)
+);
+
 -- ------------------------------------------------------------------ indexes
 CREATE INDEX IF NOT EXISTS idx_profiles_uuid       ON profiles(uuid);
 CREATE INDEX IF NOT EXISTS idx_section_profile     ON section_progress(profile_id);
 CREATE INDEX IF NOT EXISTS idx_practice_profile    ON practice_stats(profile_id);
 CREATE INDEX IF NOT EXISTS idx_exam_profile        ON exam_results(profile_id);
 CREATE INDEX IF NOT EXISTS idx_exam_created        ON exam_results(created_at);
+-- Every review read is "everything for this person"; the second index serves
+-- the "what is due today" query the session builder starts from.
+CREATE INDEX IF NOT EXISTS idx_review_profile      ON review_state(profile_id);
+CREATE INDEX IF NOT EXISTS idx_review_due          ON review_state(profile_id, due_on);
 
 -- --------------------------------------------------------- useful queries
 -- Delete one person's data entirely (cascades to every table):

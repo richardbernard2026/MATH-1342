@@ -98,11 +98,31 @@ export function ensureSchema(): Promise<void> {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_client
         ON exam_results(profile_id, client_id) WHERE client_id IS NOT NULL
     `;
+    await sql`
+      CREATE TABLE IF NOT EXISTS review_state (
+        id            SERIAL PRIMARY KEY,
+        profile_id    INTEGER REFERENCES profiles(id) ON DELETE CASCADE,
+        item_kind     TEXT NOT NULL,
+        item_id       TEXT NOT NULL,
+        streak        INTEGER DEFAULT 0,
+        correct_days  JSONB   DEFAULT '[]'::jsonb,
+        attempts      INTEGER DEFAULT 0,
+        corrects      INTEGER DEFAULT 0,
+        sure_wrong    BOOLEAN DEFAULT false,
+        due_on        DATE,
+        last_seen     DATE,
+        retired       BOOLEAN DEFAULT false,
+        updated_at    TIMESTAMPTZ DEFAULT now(),
+        UNIQUE (profile_id, item_kind, item_id)
+      )
+    `;
     await sql`CREATE INDEX IF NOT EXISTS idx_profiles_uuid    ON profiles(uuid)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_section_profile  ON section_progress(profile_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_practice_profile ON practice_stats(profile_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_exam_profile     ON exam_results(profile_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_exam_created     ON exam_results(created_at)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_review_profile   ON review_state(profile_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_review_due       ON review_state(profile_id, due_on)`;
   })();
 
   schemaReady.catch(() => {
@@ -140,6 +160,16 @@ export function isMissingTable(err: unknown): boolean {
 
 /** Exam scopes that may be written to exam_results. */
 export const ALLOWED_SCOPES = ["t1", "t2", "cum"] as const;
+
+/**
+ * Item kinds that may be written to review_state.
+ *
+ * Kept in the same shape as the other allowlists so `isAllowed` can check it.
+ * It has to match ItemKind in src/lib/scheduler.ts exactly. That type is not
+ * imported here because db.ts is server-only and scheduler.ts pulls in course
+ * data that has no business in an API bundle.
+ */
+export const ALLOWED_ITEM_KINDS = ["rule", "practice", "card"] as const;
 
 /** Valid section ids, so section_progress can never hold junk. */
 export const ALLOWED_SECTIONS = [
