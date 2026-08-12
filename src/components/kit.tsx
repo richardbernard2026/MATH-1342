@@ -11,7 +11,9 @@ import {
   Timer,
   Books,
   CalendarCheck,
+  Fire,
 } from "@phosphor-icons/react/dist/ssr";
+import { useStreak, type MasteryStatus } from "@/lib/useMastery";
 
 /* ---------------------------------------------------------------- primitives */
 
@@ -166,6 +168,97 @@ export function GhostButton({
     >
       {children}
     </button>
+  );
+}
+
+/* ------------------------------------------------------------ mastery bits */
+
+/*
+ * These three exist so the same fact renders the same way everywhere. Home, the
+ * chapter hub and the session start screen all report on the scheduler now, and
+ * a topic that is "shaky" needs to look shaky on all of them or the user is
+ * back to reading two different stories about their own progress.
+ */
+
+const statusStyle: Record<MasteryStatus, string> = {
+  solid: "border-good/40 bg-good/10 text-good",
+  learning: "border-warn/40 bg-warn/10 text-warn",
+  shaky: "border-bad/40 bg-bad/10 text-bad",
+  untouched: "border-border bg-panel2 text-[#9aa1b2]",
+};
+
+export const statusLabel: Record<MasteryStatus, string> = {
+  solid: "Solid",
+  learning: "Learning",
+  shaky: "Shaky",
+  untouched: "Not started",
+};
+
+export function StatusPill({
+  status,
+  children,
+}: {
+  status: MasteryStatus;
+  children?: React.ReactNode;
+}) {
+  return (
+    <span
+      className={clsx(
+        "inline-block whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide",
+        statusStyle[status]
+      )}
+    >
+      {children ?? statusLabel[status]}
+    </span>
+  );
+}
+
+/** A chapter-coloured progress bar. Percent is clamped, never trusted. */
+export function MasteryBar({ ch, pct, className }: { ch: number; pct: number; className?: string }) {
+  const width = Math.max(0, Math.min(100, Math.round(pct)));
+  return (
+    <div className={clsx("h-1.5 overflow-hidden rounded-full bg-panel2", className)}>
+      <div
+        className={clsx("h-full rounded-full transition-[width] duration-700", barFill[ch] || barFill[4])}
+        style={{ width: `${width}%` }}
+      />
+    </div>
+  );
+}
+
+/**
+ * The visible streak.
+ *
+ * Renders nothing until the client has read localStorage, because a server
+ * render cannot know the number and a mismatched first paint is worse than a
+ * beat of nothing.
+ */
+export function StreakBadge({ className }: { className?: string }) {
+  const { current, longest, hydrated, studiedToday } = useStreak();
+  if (!hydrated) return null;
+
+  const none = current === 0;
+  return (
+    <span
+      className={clsx(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold",
+        none ? "border-border bg-panel2 text-[#9aa1b2]" : "border-ch6/40 bg-ch6/10 text-ch6",
+        className
+      )}
+    >
+      <Fire size={14} weight={none ? "regular" : "fill"} />
+      {none ? (
+        "No streak yet, today starts one"
+      ) : (
+        <>
+          {current} day{current === 1 ? "" : "s"} in a row
+          <span className="font-semibold text-[#9aa1b2]">
+            {studiedToday ? "counted today" : "answer one to keep it"}
+            {longest > current ? ` · best ${longest}` : ""}
+          </span>
+        </>
+      )}
+    </span>
   );
 }
 

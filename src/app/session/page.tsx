@@ -42,10 +42,13 @@ import {
   MoonStars,
   Flag,
   ClipboardText,
+  Lightbulb,
+  SignOut,
 } from "@phosphor-icons/react/dist/ssr";
-import { Card, Badge, PageHeader, PrimaryButton, GhostButton } from "@/components/kit";
+import { Card, Badge, PageHeader, PrimaryButton, GhostButton, StreakBadge } from "@/components/kit";
+import { buildCandidates } from "@/lib/useMastery";
 import { MathText } from "@/components/MathText";
-import { generateProblem, topicsByChapter, allTopicKeys, type PracticeProblem } from "@/lib/practiceGenerators";
+import { generateProblem, topicsByChapter, type PracticeProblem } from "@/lib/practiceGenerators";
 import { ruleFor, optionsFor } from "@/lib/data/ruleChoices";
 import { flashcards } from "@/lib/data/flashcards";
 import { chapters, sectionTaughtOn } from "@/lib/data/chapters";
@@ -58,6 +61,7 @@ import {
   toISO,
   daysBetween,
   estimateMinutes,
+  needsScaffold,
   EXAM_DATE,
   type Candidate,
   type ItemKind,
@@ -129,6 +133,7 @@ export default function SessionPage() {
   const [log, setLog] = useState<SessionItem[]>([]);
   const [reportScope, setReportScope] = useState<number | "all">("all");
   const [copied, setCopied] = useState(false);
+  const [scaffold, setScaffold] = useState<PracticeProblem | null>(null);
   const itemStart = useRef<number>(Date.now());
   const skippedHold = useRef(false);
   const [done, setDone] = useState(false);
@@ -136,18 +141,9 @@ export default function SessionPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   /* ---- candidates ---- */
-  const candidates: Candidate[] = useMemo(() => {
-    if (!ready) return [];
-    const out: Candidate[] = [];
-    for (const k of allTopicKeys) {
-      if (!Number.isFinite(chOf(k))) continue;
-      const sec = String(chOf(k));
-      out.push({ kind: "rule", id: k, section: sec, state: get("rule", k) });
-      out.push({ kind: "practice", id: k, section: sec, state: get("practice", k) });
-    }
-    for (const f of flashcards) out.push({ kind: "card", id: f.id, section: String(f.ch), state: get("card", f.id) });
-    return out;
-  }, [ready, states, get]);
+  // Shared with Home and the chapter pages, so every screen counts the same
+  // items. See src/lib/useMastery.tsx.
+  const candidates: Candidate[] = useMemo(() => (ready ? buildCandidates(get) : []), [ready, states, get]);
 
   const stats = useMemo(() => (candidates.length ? readiness(candidates, today) : null), [candidates, today]);
 
@@ -184,6 +180,18 @@ export default function SessionPage() {
     setLeft(READ_SECONDS);
     itemStart.current = Date.now();
     skippedHold.current = false;
+
+    // Missed this twice with nothing to show for it? Do not serve the same
+    // wall a third time. Show a worked example of the same method with
+    // different numbers first, then ask. Stepping down before stepping back up
+    // is the fading-ladder idea from the old Test 2 toolkit.
+    const st = queue[idx].state;
+    if (needsScaffold(st) && m.kind !== "card") {
+      const alt = generateProblem(chOf(queue[idx].id), queue[idx].id);
+      setScaffold(alt);
+    } else {
+      setScaffold(null);
+    }
     if (m.kind === "practice" && m.problem.kind === "numeric") {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -250,6 +258,10 @@ export default function SessionPage() {
           title="Today"
           sub={`${daysLeft} day${daysLeft === 1 ? "" : "s"} until the final. The queue is picked for you: what you missed, what is due, and nothing you already have.`}
         />
+
+        <div className="mb-5">
+          <StreakBadge />
+        </div>
 
         {stats && (
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -472,7 +484,11 @@ export default function SessionPage() {
   const pos = idx + 1;
   const total = queue.length;
   const current = queue[idx];
-  const isPretest = kind === "afternoon" && current && pretestSections.includes(current.section);
+  // pretestSections holds section ids like "8.1" while a queue item's section
+  // is the bare chapter "8", so a direct includes() never matched and every
+  // pretest item went unlabelled. Compare on the chapter instead.
+  const pretestChapters = new Set(pretestSections.map((sec) => sec.split(".")[0]));
+  const isPretest = Boolean(kind === "afternoon" && current && pretestChapters.has(current.section));
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -520,8 +536,41 @@ export default function SessionPage() {
             <MathText>{live.kind === "card" ? live.front : live.kind === "rule" ? live.prompt : live.problem.prompt}</MathText>
           </div>
 
-          {/* confidence first, always */}
-          {result === null && (
+          {scaffold && result === null && (
+            <div className="fadein mt-5 rounded-xl border border-accent/40 bg-accent/5 p-4">
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-accent">
+                <Lightbulb size={14} weight="fill" /> You have missed this one before, so here is
+                it worked out first
+              </div>
+              <div className="mb-3 text-sm leading-relaxed">
+                <MathText>{scaffold.prompt}</MathText>
+              </div>
+              <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-[#9aa1b2]">
+                {scaffold.steps.map((st, i) => (
+                  <li key={i}>
+                    <MathText>{st}</MathText>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-3 border-t border-border pt-3 text-xs text-[#9aa1b2]">
+                Different numbers, same method. Now do the one above.
+              </div>
+            </div>
+          )}
+
+          {/* confidence first, unless this is a pretest on unlearned material */}
+          {result === null && isPretest && conf === null && (
+            <div className="mt-5 rounded-xl border border-warn/30 bg-warn/5 p-4 text-sm leading-relaxed">
+              <span className="font-bold text-warn">You have not been taught this yet.</span> It is
+              covered in class tonight. Have a go, get it wrong, and it will stick better when he
+              teaches it. No confidence rating and nothing counts against you.
+              <div className="mt-3">
+                <GhostButton onClick={() => setConf(0)}>Give it a shot</GhostButton>
+              </div>
+            </div>
+          )}
+
+          {result === null && !isPretest && (
             <div className="mt-5">
               <div className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9aa1b2]">
                 Before you answer, how sure are you?
@@ -726,10 +775,17 @@ export default function SessionPage() {
         </Card>
       )}
 
-      <p className="mt-5 text-center text-xs text-[#9aa1b2]">
-        Estimated {Math.round(estimateMinutes(queue))} minutes for this queue, across{" "}
-        {new Set(queue.map((q) => q.section)).size} chapters.
-      </p>
+      <div className="mt-6 flex flex-col items-center gap-3">
+        <GhostButton onClick={() => setDone(true)}>
+          <span className="flex items-center gap-1.5">
+            <SignOut size={16} weight="bold" /> Finish here
+          </span>
+        </GhostButton>
+        <p className="text-center text-xs leading-relaxed text-[#9aa1b2]">
+          Everything you have answered is already saved. Stopping early costs you nothing, and a
+          tired session teaches you your own mistakes.
+        </p>
+      </div>
     </div>
   );
 }

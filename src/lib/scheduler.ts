@@ -102,6 +102,37 @@ export function requiredCorrectDays(s: ReviewState): number {
   return s.sureWrong ? 4 : 3;
 }
 
+/**
+ * Estimated chance of getting this right next time.
+ *
+ * Used to compose a session near an 85% success rate. Wilson, Shenhav,
+ * Straccia & Cohen (2019, Nature Communications) derive an optimal training
+ * accuracy of about 85% for gradient-descent style learners: below it,
+ * learning slows AND the learner quits. Their result is for artificial and
+ * biologically plausible networks on binary classification, so treat it as a
+ * direction rather than a law, but the direction is not in doubt and the
+ * alternative, sorting hardest-first, produced a session with a roughly 25%
+ * hit rate that got abandoned halfway through.
+ */
+export function successOdds(s: ReviewState): number {
+  if (s.retired) return 0.95;
+  // First-attempt prior. Calibrated to the observed rate rather than guessed:
+  // the first real session ran 55% across 20 items, most of them new.
+  if (s.attempts === 0) return 0.55;
+  const base = s.corrects / s.attempts;
+  const streakBonus = Math.min(0.25, s.streak * 0.12);
+  const lapsePenalty = s.streak === 0 && s.attempts > 0 ? 0.15 : 0;
+  return Math.max(0.05, Math.min(0.97, base + streakBonus - lapsePenalty));
+}
+
+/**
+ * Has this item been missed enough times to need scaffolding rather than
+ * another cold attempt? Two or more attempts with nothing to show for them.
+ */
+export function needsScaffold(s: ReviewState): boolean {
+  return s.attempts >= 2 && s.corrects === 0;
+}
+
 export function isRetired(s: ReviewState): boolean {
   return s.correctDays.length >= requiredCorrectDays(s) && s.streak >= 3;
 }
@@ -132,6 +163,12 @@ export function grade(
     next.corrects = s.corrects + 1;
     next.streak = s.streak + 1;
     if (!next.correctDays.includes(today)) next.correctDays.push(today);
+    // A sure-wrong flag that never clears turns the report into a wall of red
+    // on topics that have since been fixed, which is both wrong and
+    // discouraging. Two clean days of confident correct answers earns it off.
+    if (next.sureWrong && g.confidence >= 2 && next.correctDays.length >= 2 && next.streak >= 2) {
+      next.sureWrong = false;
+    }
   } else {
     next.streak = 0;
     // High confidence plus wrong is the hypercorrection case. Flag it: it gets
@@ -195,14 +232,19 @@ export function isTaught(section: string, today: string): boolean {
     return on ? daysBetween(on, today) >= 0 : true;
   }
   // A bare chapter number, which is what practice topics and flashcards carry.
-  // Treat the chapter as available only once every section in it has been
-  // covered, since a mixed chapter drill can pull from any of them.
+  //
+  // Availability starts at the chapter's FIRST section, not its last. Waiting
+  // for the last one meant Chapter 8, whose sections run Aug 12 to Aug 14,
+  // stayed invisible until four days before Test 3 covers it. The cost is that
+  // a chapter-level drill can occasionally reach a topic from a section taught
+  // later that same week. That is a far smaller problem than never seeing the
+  // chapter, and those items are the ones the pretest framing is for.
   const dates = Object.entries(sectionTaughtOn)
     .filter(([id]) => id.split(".")[0] === section)
     .map(([, d]) => d)
     .sort();
   if (!dates.length) return true;
-  return daysBetween(dates[dates.length - 1], today) >= 0;
+  return daysBetween(dates[0], today) >= 0;
 }
 
 /**
@@ -246,7 +288,11 @@ export function scoreCandidate(c: Candidate, today: string, session: SessionKind
     p = 400;
     reason = "due today";
   } else if (s.attempts === 0) {
-    p = 200;
+    // New material used to sit below everything due, which starves it once a
+    // few days of history exist. With 72 of 92 topics untouched and Chapter 8
+    // taught this week, that path ends at the exam having never seen a
+    // hypothesis test. buildSession also reserves a hard quota for these.
+    p = 340;
     reason = "not seen yet";
   } else {
     // Scheduled for later. Cepeda says pulling it forward costs retention.
@@ -305,9 +351,27 @@ export function buildSession(
   minutes = 25,
   exam = EXAM_DATE
 ): Scored[] {
+  // Identifying the method gates computing it. Being handed "compute the
+  // confidence interval" for a topic whose rule you cannot yet recognise is
+  // backwards, and it is most of what made an early session feel impossible.
+  const ruleState = new Map<string, ReviewState>();
+  for (const c of candidates) if (c.kind === "rule") ruleState.set(c.id, c.state);
+  const gated = (c: Candidate) => {
+    if (c.kind !== "practice") return false;
+    const r = ruleState.get(c.id);
+    if (!r) return false;
+    // Blocked only while the rule half is actively failing. An untouched rule
+    // half does not block, otherwise nothing new could ever start.
+    return r.attempts > 0 && r.streak === 0 && r.corrects === 0;
+  };
+
   const eligible = candidates
     .filter((c) => isTaught(c.section, today))
-    .map((c) => scoreCandidate(c, today, session, exam))
+    .map((c) => {
+      const sc = scoreCandidate(c, today, session, exam);
+      if (gated(c)) return { ...sc, priority: sc.priority * 0.15, reason: "identify it first" };
+      return sc;
+    })
     .filter((c) => c.priority > 0)
     .sort((a, b) => b.priority - a.priority);
 
@@ -315,6 +379,40 @@ export function buildSession(
   const perSection = new Map<string, number>();
   const countSection = new Map<string, number>();
   let spent = 0;
+
+  // Reserve roughly a fifth of the session for material never seen before, so
+  // that a growing pile of due reviews cannot crowd out a whole chapter.
+  const NEW_QUOTA = Math.max(3, Math.round(minutes * 0.18));
+  let newSpent = 0;
+
+  // A hard ceiling on item count as well as minutes. Flashcards cost 0.4
+  // minutes each, so a 25 minute budget can otherwise become a 46 item
+  // session, which reads as endless no matter how quick each item is.
+  const MAX_ITEMS = 22;
+
+  // At most this share of the session may be material the learner is likely to
+  // miss. When everything attempted so far has failed, an unbounded fill turns
+  // the session back into the firehose the 85% rule warns about, so the
+  // remainder is taken from newer or easier material instead. This cannot
+  // always reach 85%: if there is genuinely nothing you can do yet, no
+  // ordering fixes that. It can stop the session being ALL of it.
+  const MAX_HARD = Math.ceil(MAX_ITEMS * 0.45);
+  let hardCount = 0;
+  const isHard = (c: Scored) => successOdds(c.state) < 0.35;
+
+  // Open on two things the learner can actually do.
+  //
+  // These are drawn from everything taught, NOT from the due list. Anything
+  // solid enough to be a warm-up is by definition scheduled for later, so
+  // restricting warm-ups to due items produced sessions that opened at 18%
+  // expected accuracy. Pulling two items forward costs a little spacing
+  // efficiency and buys the session actually being finished, which is worth
+  // vastly more than nothing.
+  const warmups = candidates
+    .filter((c) => isTaught(c.section, today) && c.state.attempts > 0 && successOdds(c.state) >= 0.6)
+    .sort((a, b) => successOdds(b.state) - successOdds(a.state))
+    .slice(0, 2)
+    .map((c) => ({ ...scoreCandidate(c, today, session, exam), priority: 9999, reason: "warm up" }));
 
   // No single chapter may take more than this share of the session. Without
   // the cap, the morning weighting toward recent chapters fills the whole
@@ -329,30 +427,97 @@ export function buildSession(
   // about half the items, and four is comfortably under that.
   const COUNT_CAP = 4;
 
-  const take = (c: Scored, cap: number, countCap: number) => {
+  // Warm-ups are rebuilt objects rather than the ones in `eligible`, so an
+  // identity check missed them and the same item could be served twice in one
+  // session, back to back in the same chapter. Dedupe on kind and id.
+  const chosen = new Set<string>();
+  const seenAlready = (c: Scored) => chosen.has(c.kind + ":" + c.id);
+
+  const take = (c: Scored, cap: number, countCap: number, allowHard = true) => {
+    if (seenAlready(c)) return false;
     const cost = MINUTES_PER_ITEM[c.kind];
     if (spent + cost > minutes) return false;
     const used = perSection.get(c.section) ?? 0;
     if (used + cost > cap) return false;
     if ((countSection.get(c.section) ?? 0) >= countCap) return false;
+    const hard = isHard(c);
+    const urgent = c.priority >= 500;
+    if (hard && !urgent && (!allowHard || hardCount >= MAX_HARD)) return false;
+    if (hard) hardCount++;
     picked.push(c);
+    chosen.add(c.kind + ":" + c.id);
     perSection.set(c.section, used + cost);
     countSection.set(c.section, (countSection.get(c.section) ?? 0) + 1);
     spent += cost;
     return true;
   };
 
+  for (const w of warmups) take(w, Infinity, COUNT_CAP);
+
+  // First pass: reserve the new-material quota, newest chapter first.
+  //
+  // Ordering matters here. Sorting new material by raw priority let Chapter 7
+  // fill the whole quota and Chapter 8 never appeared at all, five days before
+  // a test that covers it. Most recently taught goes first, which is also what
+  // you want pedagogically: drill what you just heard in class.
+  const taughtOn = (sec: string) => {
+    const ds = Object.entries(sectionTaughtOn)
+      .filter(([id]) => id.split(".")[0] === sec)
+      .map(([, d]) => d)
+      .sort();
+    return ds.length ? ds[0] : "1970-01-01";
+  };
+  const freshFirst = eligible
+    .filter((c) => c.state.attempts === 0)
+    .sort((a, b) => taughtOn(b.section).localeCompare(taughtOn(a.section)));
+
+  for (const c of freshFirst) {
+    if (minutes - spent < 0.4 || newSpent >= NEW_QUOTA) break;
+    if (seenAlready(c)) continue;
+    const before = spent;
+    if (take(c, sectionCap, COUNT_CAP)) newSpent += spent - before;
+  }
+
+  // Second pass: fill by priority, but keep the expected success rate near
+  // 85%. Anything likely to be missed is skipped once the session already
+  // holds its share of hard items, and gets picked up next time instead.
+  const TARGET = 0.85;
   for (const c of eligible) {
     if (minutes - spent < 0.4) break;
+    if (seenAlready(c)) continue;
+    const odds = picked.map((x) => successOdds(x.state));
+    const mean = odds.length ? odds.reduce((a, b) => a + b, 0) / odds.length : TARGET;
+    const mine = successOdds(c.state);
+    // The success-rate target shapes the FILLER, never the core review work.
+    // Lapses and sure-wrong items sit at priority 800 and above, and they are
+    // the highest-value thing in the queue by a wide margin. An earlier version
+    // of this filter was quietly dropping exactly the item the session existed
+    // to fix, which is the opposite of the intent.
+    const urgent = c.priority >= 500;
+    if (!urgent && picked.length >= 4 && mine < 0.5 && mean < TARGET - 0.12) continue;
+    if (picked.length >= MAX_ITEMS) break;
     take(c, sectionCap, COUNT_CAP);
   }
-  // Second pass without the cap, so a thin day (few chapters taught, or almost
-  // everything retired) still fills the session rather than ending early.
-  if (minutes - spent >= 0.4) {
+
+  // Anything still missing gets filled from whatever is easiest, so the tail of
+  // the session is not the hardest part of it.
+  if (picked.length < MAX_ITEMS && minutes - spent >= 0.4) {
+    const easiest = [...eligible].sort((a, b) => successOdds(b.state) - successOdds(a.state));
+    for (const c of easiest) {
+      if (minutes - spent < 0.4 || picked.length >= MAX_ITEMS) break;
+      if (seenAlready(c)) continue;
+      take(c, sectionCap, COUNT_CAP);
+    }
+  }
+  // Final pass with a looser cap, so a thin day (few chapters taught, or almost
+  // everything retired) still fills the session rather than ending early. The
+  // count cap only loosens, it does not vanish: dropping it entirely let one
+  // chapter take enough of the session that alternation became impossible.
+  if (minutes - spent >= 0.4 && picked.length < MAX_ITEMS) {
     for (const c of eligible) {
-      if (minutes - spent < 0.4) break;
-      if (picked.includes(c)) continue;
-      take(c, Infinity, Infinity);
+      if (minutes - spent < 0.4 || picked.length >= MAX_ITEMS) break;
+      if (seenAlready(c)) continue;
+      take(c, Infinity, COUNT_CAP + 2);
     }
   }
   return interleave(picked);
@@ -388,7 +553,10 @@ export function interleave<T extends { section: string; priority?: number }>(ite
     // Does any section have to play now to avoid a run later?
     for (const [k, v] of groups) {
       if (k === last || !v.length) continue;
-      if (2 * v.length > remaining + 1) {
+      // Off by one matters here. With 3 slots left and 2 of them from one
+      // section, that section MUST go now, or the last two are forced adjacent.
+      // The old guard used remaining + 1 and let exactly that case through.
+      if (2 * v.length > remaining) {
         key = k;
         break;
       }

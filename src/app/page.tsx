@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Brain,
+  CalendarCheck,
   Cards,
   ChatCircleDots,
   CheckCircle,
@@ -21,6 +22,8 @@ import { chapterRangeLabel, chapters, examScopes } from "@/lib/data/chapters";
 import { flashcards } from "@/lib/data/flashcards";
 import { lessons } from "@/lib/data/lessons";
 import { useNextUp, useProfile, useStudyStats } from "@/lib/useProfile";
+import { useMastery } from "@/lib/useMastery";
+import { MasteryBar, StreakBadge } from "@/components/kit";
 import {
   CountUp,
   DotGrid,
@@ -75,10 +78,13 @@ function useFlashcardMastery() {
 }
 
 export default function HomePage() {
-  const { ready, firstName, sections } = useProfile();
+  const { firstName, sections } = useProfile();
   const stats = useStudyStats();
   const nextUp = useNextUp();
   const flash = useFlashcardMastery();
+  // The same read model /session runs on. Everything below that talks about
+  // readiness, solid counts or what is due comes from here, not from useProfile.
+  const mastery = useMastery();
 
   const viewedIds = useMemo(
     () => new Set(sections.filter((s) => s.viewed).map((s) => s.section_id)),
@@ -110,6 +116,21 @@ export default function HomePage() {
   const bestPct = stats.bestExam
     ? Math.round((stats.bestExam.score / stats.bestExam.total) * 100)
     : null;
+
+  /**
+   * The chapter with the most room in it.
+   *
+   * Only chapters already covered in class are eligible, and only once
+   * something has been attempted there, because "0% durable" on a chapter you
+   * have never been taught is not a weakness, it is a Tuesday.
+   */
+  const weakest = useMemo(() => {
+    const rows = Object.entries(mastery.byChapter)
+      .map(([ch, m]) => ({ ch: Number(ch), m }))
+      .filter((r) => r.m.taught && r.m.total > 0 && r.m.untouched < r.m.total && r.m.percent < 80);
+    if (!rows.length) return null;
+    return rows.reduce((a, b) => (b.m.percent < a.m.percent ? b : a));
+  }, [mastery.byChapter]);
 
   return (
     <div className="space-y-6">
@@ -147,6 +168,9 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+
+      {/* ------------------------------------------------------------- today */}
+      <TodayPanel m={mastery} />
 
       {/* --------------------------------------------------- next up + rings */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -265,7 +289,10 @@ export default function HomePage() {
       </div>
 
       {/* -------------------------------------------------------- weak spot */}
-      {ready && stats.weakest && stats.weakest.pct < 0.8 && (
+      {/* Weakest now means weakest according to the scheduler, not according to
+          a running tally of loose practice attempts. Those two used to disagree,
+          and the one the session is built from is the one worth acting on. */}
+      {mastery.ready && weakest && (
         <SpotlightCard className="fadein p-5" glow="#ff5d5d">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-bad/10 text-bad">
@@ -273,15 +300,16 @@ export default function HomePage() {
             </div>
             <div className="min-w-[14rem] flex-1">
               <div className="text-sm font-bold">
-                Chapter {stats.weakest.chapter} is your weakest right now
+                Chapter {weakest.ch} is your weakest right now
               </div>
               <p className="mt-0.5 text-xs text-[#9aa1b2]">
-                {stats.weakest.correct} of {stats.weakest.total} correct (
-                {Math.round(stats.weakest.pct * 100)}%). That is where the most points are sitting.
+                {weakest.m.percent}% durable, {weakest.m.solid} of {weakest.m.total} solid
+                {weakest.m.shaky > 0 ? `, ${weakest.m.shaky} currently shaky` : ""}. That is where
+                the most points are sitting.
               </p>
             </div>
             <Link
-              href={`/chapter/${stats.weakest.chapter}`}
+              href={`/chapter/${weakest.ch}`}
               className="inline-flex items-center gap-2 rounded-xl border border-bad/40 bg-bad/10 px-4 py-2 text-sm font-bold text-bad transition-colors hover:bg-bad/20"
             >
               Go fix it <ArrowRight size={14} weight="bold" />
@@ -293,14 +321,15 @@ export default function HomePage() {
       {/* ------------------------------------------------------- chapter grid */}
       <section>
         <SectionTitle>Chapters</SectionTitle>
+        <p className="-mt-1 mb-3 text-xs text-[#9aa1b2]">
+          The ring is how much of the chapter you have opened. The bar is how much of it the
+          scheduler considers durable, which is the same measurement Today runs on.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {chapters.map((c) => {
             const p = perChapterDone[c.num];
             const pct = Math.round((p.done / p.total) * 100);
-            const acc = stats.perChapter[c.num];
-            const accPct = acc && acc.total ? Math.round((acc.correct / acc.total) * 100) : null;
-            const accColor =
-              accPct === null ? "" : accPct >= 80 ? "#35c98f" : accPct >= 60 ? "#ffd166" : "#ff5d5d";
+            const mc = mastery.byChapter[c.num];
             return (
               <Link key={c.num} href={`/chapter/${c.num}`} className="fadein block">
                 <SpotlightCard className="h-full p-5" glow={chHex(c.num)}>
@@ -318,17 +347,30 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center gap-2 text-[0.68rem] font-semibold text-[#9aa1b2]">
+                  {mc && (
+                    <div className="mt-4">
+                      <div className="mb-1.5 flex items-center gap-2 text-[0.68rem] font-semibold text-[#9aa1b2]">
+                        <span>
+                          <span className="text-good">{mc.solid}</span> of {mc.total} solid
+                        </span>
+                        {mc.shaky > 0 && <span className="text-bad">{mc.shaky} shaky</span>}
+                        <span className="ml-auto">{mc.percent}%</span>
+                      </div>
+                      <MasteryBar ch={c.num} pct={mc.percent} />
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex items-center gap-2 text-[0.68rem] font-semibold text-[#9aa1b2]">
                     <span>
                       {p.done}/{p.total} sections
                     </span>
-                    {accPct !== null && (
-                      <span
-                        className="rounded-md px-1.5 py-0.5"
-                        style={{ color: accColor, background: accColor + "1a" }}
-                      >
-                        {accPct}% correct
+                    {mc && mc.due > 0 && (
+                      <span className="rounded-md bg-warn/10 px-1.5 py-0.5 text-warn">
+                        {mc.due} due today
                       </span>
+                    )}
+                    {mc && mc.due === 0 && !mc.taught && (
+                      <span className="rounded-md bg-panel2 px-1.5 py-0.5">not taught yet</span>
                     )}
                     <ArrowRight size={13} weight="bold" className="ml-auto" />
                   </div>
@@ -434,6 +476,97 @@ const TOOLS = [
 ];
 
 /* ------------------------------------------------------------- small parts */
+
+/**
+ * What Today knows, said on Home.
+ *
+ * This is the fix for the complaint that the two tabs felt like two apps. Every
+ * figure in here is the scheduler's own: the readiness percent is the one the
+ * session start screen prints, "solid" means retired against the correct-days
+ * criterion, and the due count is the number of items the queue would actually
+ * hand you right now. The primary action is the session, because deciding what
+ * to study is the step that reliably does not happen.
+ */
+function TodayPanel({ m }: { m: ReturnType<typeof useMastery> }) {
+  const due = Object.values(m.byChapter).reduce((a, c) => a + c.due, 0);
+  const o = m.overall;
+
+  return (
+    <GradientBorder className="fadein">
+      <div className="sheen relative overflow-hidden rounded-2xl p-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 text-[0.68rem] font-bold uppercase tracking-wider text-[#9aa1b2]">
+            <CalendarCheck size={13} weight="fill" className="text-warn" />
+            From Today
+          </div>
+          <StreakBadge className="ml-auto" />
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-4">
+          <div>
+            <div className="text-4xl font-bold tracking-tight">
+              <CountUp value={o.percent} suffix="%" />
+            </div>
+            <div className="mt-1 text-xs text-[#9aa1b2]">ready for the final</div>
+          </div>
+          <BigStat value={o.retired} of={o.total} label="topics solid" tone="text-good" />
+          <BigStat value={o.sureWrongOpen} label="sure and wrong, still open" tone="text-bad" />
+          <BigStat value={o.daysLeft} label="days left" tone="text-warn" />
+          <BigStat value={due} label="items due right now" tone="" />
+        </div>
+
+        <MasteryBar ch={4} pct={o.percent} className="mt-5 h-2" />
+
+        <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#9aa1b2]">
+          {o.total === 0
+            ? "Nothing scheduled yet. One session sets the baseline that every chapter bar below is measured against."
+            : due > 0
+              ? `${due} item${due === 1 ? " is" : "s are"} due right now. The chapter bars below are the same measurement, split by chapter, so anything you clear here moves them.`
+              : "Nothing is due this minute. A session will still pull forward whatever is closest and anything never seen."}
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Link
+            href="/session"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-bg transition-transform active:scale-95"
+          >
+            Start today&apos;s session <ArrowRight size={15} weight="bold" />
+          </Link>
+          <Link
+            href="/practice"
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-panel2 px-4 py-2.5 text-sm font-semibold transition-colors hover:border-white/40"
+          >
+            <Brain size={15} /> Free practice
+          </Link>
+        </div>
+      </div>
+    </GradientBorder>
+  );
+}
+
+function BigStat({
+  value,
+  of,
+  label,
+  tone,
+}: {
+  value: number;
+  of?: number;
+  label: string;
+  tone: string;
+}) {
+  return (
+    <div>
+      <div className={`text-2xl font-bold tracking-tight ${tone}`}>
+        {value}
+        {of !== undefined && (
+          <span className="text-base font-semibold text-[#9aa1b2]">/{of}</span>
+        )}
+      </div>
+      <div className="mt-1 text-xs text-[#9aa1b2]">{label}</div>
+    </div>
+  );
+}
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
