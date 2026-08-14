@@ -603,10 +603,31 @@ export const ch10Topics: { key: string; label: string }[] = [
  * half the contexts have a negative slope, because a worksheet that only ever
  * produces positive r teaches the student to stop reading the sign.
  */
+/**
+ * `base`, `slope`, `spread` and `yMin` are the data generator and must not be
+ * touched; the wording fields around them are written as whole sentences.
+ *
+ * The old shape held bare nouns and one shared frame, "For a chain of stores,
+ * advertisements run per week is x (ads) and weekly sales is y (thousands of
+ * dollars)", which is not a sentence anyone would write. Each story now carries
+ * its own opening, its own sentence naming the two variables, and its own
+ * prediction question, following the ALEKS items in the Chapter 10 deck ("For
+ * each Cadet in the sample, we have listed both the mileage x (in thousands of
+ * miles) ... and the price y (in thousands of dollars) at which the Cadet was
+ * sold used") and Worksheet 10 ("Using y', if the player has 40 times at bat,
+ * what is the number of hits the player gets?").
+ */
 type BiContext = {
-  x: string;
-  y: string;
-  who: string;
+  /** Opening sentence saying who is looking at what and why. */
+  setup: string;
+  /** Sentence naming $x$ and $y$ for one member of the sample. */
+  variables: string;
+  /** Plural noun phrase for the $x$ values, as in "pairs of hours studied and ...". */
+  xName: string;
+  /** Plural noun phrase for the $y$ values. */
+  yName: string;
+  /** Prediction question, worded for this story. */
+  predict: (x0: number) => string;
   xUnit: string;
   yUnit: string;
   base: number;
@@ -617,9 +638,13 @@ type BiContext = {
 
 const BIVARIATE: BiContext[] = [
   {
-    x: "hours studied",
-    y: "exam score",
-    who: "students in a statistics section",
+    setup:
+      "A statistics instructor wants to determine whether the time a student spends studying is related to performance on the final exam.",
+    variables:
+      "For each student in a random sample, $x$ is the number of hours studied and $y$ is the score earned on the final exam.",
+    xName: "hours studied",
+    yName: "final exam scores",
+    predict: (x0) => `Using $y'$, what final exam score is predicted for a student who studies ${x0} hours?`,
     xUnit: "hours",
     yUnit: "points",
     base: 40,
@@ -628,9 +653,13 @@ const BIVARIATE: BiContext[] = [
     yMin: 10,
   },
   {
-    x: "number of stops on a delivery route",
-    y: "driving time",
-    who: "routes at a courier company",
+    setup:
+      "A courier company wants to determine whether the length of a delivery route is related to how long the route takes to drive.",
+    variables:
+      "For each route in a random sample, $x$ is the number of stops on the route and $y$ is the driving time in minutes.",
+    xName: "stops on a route",
+    yName: "driving times",
+    predict: (x0) => `Using $y'$, what driving time is predicted for a route with ${x0} stops?`,
     xUnit: "stops",
     yUnit: "minutes",
     base: 8,
@@ -639,9 +668,14 @@ const BIVARIATE: BiContext[] = [
     yMin: 5,
   },
   {
-    x: "years of experience",
-    y: "units produced per week",
-    who: "assembly workers at a plant",
+    setup:
+      "A plant manager wants to determine whether an assembly worker's experience is related to how much that worker produces.",
+    variables:
+      "For each worker in a random sample, $x$ is the number of years of experience and $y$ is the number of units produced in a week.",
+    xName: "years of experience",
+    yName: "weekly output totals",
+    predict: (x0) =>
+      `Using $y'$, how many units per week are predicted for a worker with ${x0} years of experience?`,
     xUnit: "years",
     yUnit: "units",
     base: 22,
@@ -650,9 +684,12 @@ const BIVARIATE: BiContext[] = [
     yMin: 5,
   },
   {
-    x: "age of a used car",
-    y: "resale price",
-    who: "cars at a dealership",
+    setup: "A dealership wants to determine how the age of a used car is related to the price it sells for.",
+    variables:
+      "For each car in a random sample, $x$ is the age of the car in years and $y$ is the resale price in hundreds of dollars.",
+    xName: "car ages",
+    yName: "resale prices",
+    predict: (x0) => `Using $y'$, what resale price is predicted for a car that is ${x0} years old?`,
     xUnit: "years",
     yUnit: "hundreds of dollars",
     base: 96,
@@ -661,9 +698,13 @@ const BIVARIATE: BiContext[] = [
     yMin: 8,
   },
   {
-    x: "number of absences",
-    y: "final average",
-    who: "students in a course",
+    setup:
+      "School administrators wondered whether the number of classes a student misses is related to the grade the student finishes with.",
+    variables:
+      "For each student in a random sample, $x$ is the number of absences and $y$ is the final course average in percent.",
+    xName: "absence counts",
+    yName: "final course averages",
+    predict: (x0) => `Using $y'$, what final course average is predicted for a student with ${x0} absences?`,
     xUnit: "absences",
     yUnit: "percent",
     base: 93,
@@ -672,9 +713,12 @@ const BIVARIATE: BiContext[] = [
     yMin: 40,
   },
   {
-    x: "advertisements run per week",
-    y: "weekly sales",
-    who: "a chain of stores",
+    setup: "A chain of stores wants to determine whether the advertising it runs is related to what it sells.",
+    variables:
+      "For each week in a random sample, $x$ is the number of advertisements run and $y$ is that week's sales in thousands of dollars.",
+    xName: "advertisement counts",
+    yName: "weekly sales totals",
+    predict: (x0) => `Using $y'$, what weekly sales total is predicted for a week with ${x0} advertisements?`,
     xUnit: "ads",
     yUnit: "thousands of dollars",
     base: 14,
@@ -683,9 +727,13 @@ const BIVARIATE: BiContext[] = [
     yMin: 3,
   },
   {
-    x: "hours of exercise per week",
-    y: "resting heart rate",
-    who: "adults in a fitness study",
+    setup: "A fitness study asks whether the amount an adult exercises is related to that adult's resting heart rate.",
+    variables:
+      "For each adult in a random sample, $x$ is the number of hours of exercise per week and $y$ is the resting heart rate in beats per minute.",
+    xName: "weekly exercise hours",
+    yName: "resting heart rates",
+    predict: (x0) =>
+      `Using $y'$, what resting heart rate is predicted for an adult who exercises ${x0} hours per week?`,
     xUnit: "hours",
     yUnit: "beats per minute",
     base: 84,
@@ -694,9 +742,13 @@ const BIVARIATE: BiContext[] = [
     yMin: 45,
   },
   {
-    x: "number of practice problems completed",
-    y: "quiz score",
-    who: "students in a review session",
+    setup:
+      "A tutor wants to determine whether the number of practice problems a student completes is related to the quiz score that follows.",
+    variables:
+      "For each student in a random sample, $x$ is the number of practice problems completed and $y$ is the score on the quiz.",
+    xName: "practice problem counts",
+    yName: "quiz scores",
+    predict: (x0) => `Using $y'$, what quiz score is predicted for a student who completes ${x0} practice problems?`,
     xUnit: "problems",
     yUnit: "points",
     base: 46,
@@ -938,10 +990,7 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
         10,
         "corr-r",
         "Correlation Coefficient",
-        `For ${ctx.who}, ${ctx.x} is $x$ (${ctx.xUnit}) and ${ctx.y} is $y$ (${ctx.yUnit}). The pairs are ${pairsLine(
-          xs,
-          ys
-        )}. Find $SS_{xy}$.`,
+        `${ctx.setup} ${ctx.variables} The paired data are ${pairsLine(xs, ys)}. Find $SS_{xy}$.`,
         [
           `Build the sums table first: ${sumsLine(s)}`,
           `$SS_{xy} = \\sum xy - \\dfrac{(\\sum x)(\\sum y)}{n} = ${round(s.sumXY, 4)} - \\dfrac{(${round(
@@ -962,7 +1011,7 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
       10,
       "corr-r",
       "Correlation Coefficient",
-      `For ${ctx.who}, ${ctx.x} is $x$ (${ctx.xUnit}) and ${ctx.y} is $y$ (${ctx.yUnit}). The pairs are ${pairsLine(
+      `${ctx.setup} ${ctx.variables} The paired data are ${pairsLine(
         xs,
         ys
       )}. Find the correlation coefficient $r$, rounded to 3 decimals.`,
@@ -974,8 +1023,8 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
           4
         )})(${round(s.SSy, 4)})}} = ${rr}$`,
         rr > 0
-          ? `$r$ is positive, so ${ctx.y} tends to rise as ${ctx.x} rises. Check that it landed between $-1$ and $1$.`
-          : `$r$ is negative, so ${ctx.y} tends to fall as ${ctx.x} rises. Check that it landed between $-1$ and $1$.`,
+          ? `$r$ is positive, so ${ctx.xName} above their mean tend to be paired with ${ctx.yName} above their mean. Check that $r$ landed between $-1$ and $1$.`
+          : `$r$ is negative, so ${ctx.xName} above their mean tend to be paired with ${ctx.yName} below their mean. Check that $r$ landed between $-1$ and $1$.`,
       ],
       rr,
       Math.min(0.005, Math.max(0.001, 0.3 * Math.abs(rr - s.SSxy / s.SSx)))
@@ -1012,10 +1061,10 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
         10,
         "corr-sig",
         "Is r Significant?",
-        `A sample of $n = ${s.n}$ pairs relating ${ctx.x} and ${ctx.y} gives $r = ${rr}$. At $\\alpha = ${alpha}$, the two-tailed critical value from Table F at d.f. $= ${df}$ is $${round(
+        `A random sample of $n = ${s.n}$ pairs of ${ctx.xName} and ${ctx.yName} gives $r = ${rr}$. At $\\alpha = ${alpha}$, the two-tailed critical value from Table F at d.f. $= ${df}$ is $${round(
           cv,
           3
-        )}$. What is the decision?`,
+        )}$. Is there a significant linear relationship between the two variables?`,
         [
           "Reject $H_0$. $r$ IS significant, so a regression line may be used.",
           "Do not reject $H_0$. $r$ is NOT significant, so the best prediction of $y$ is $\\bar{y}$.",
@@ -1039,10 +1088,10 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
       10,
       "corr-sig",
       "Is r Significant?",
-      `For ${ctx.who}, ${ctx.x} is $x$ and ${ctx.y} is $y$. The pairs are ${pairsLine(
+      `${ctx.setup} ${ctx.variables} The paired data are ${pairsLine(
         xs,
         ys
-      )}, and $r = ${rr}$. Find the $t$ test value for the correlation coefficient, rounded to 3 decimals.`,
+      )}, and $r = ${rr}$. Using the $t$-test method, find the test value for the correlation coefficient, rounded to 3 decimals.`,
       [
         `$H_0: \\rho = 0$ against $H_1: \\rho \\ne 0$, with d.f. $= n - 2 = ${df}$.`,
         `$t = r\\sqrt{\\dfrac{n-2}{1-r^2}} = ${rr}\\sqrt{\\dfrac{${df}}{1 - ${round(r * r, 4)}}} = ${round(
@@ -1081,10 +1130,10 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
         10,
         "reg-line",
         "Regression Line",
-        `For ${ctx.who}, ${ctx.x} is $x$ (${ctx.xUnit}) and ${ctx.y} is $y$ (${ctx.yUnit}). The pairs are ${pairsLine(
+        `${ctx.setup} ${ctx.variables} The paired data are ${pairsLine(
           xs,
           ys
-        )}, and $r$ has already been shown to be significant. Find the y-intercept $a$ of the regression line.`,
+        )}, and $r$ has already been shown to be significant. Find the y-intercept $a$ of the regression line $y' = a + bx$.`,
         [
           `Sums table: ${sumsLine(s)}`,
           `${ssLine(s)}`,
@@ -1105,10 +1154,10 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
       10,
       "reg-line",
       "Regression Line",
-      `For ${ctx.who}, ${ctx.x} is $x$ (${ctx.xUnit}) and ${ctx.y} is $y$ (${ctx.yUnit}). The pairs are ${pairsLine(
+      `${ctx.setup} ${ctx.variables} The paired data are ${pairsLine(
         xs,
         ys
-      )}, and $r$ has already been shown to be significant. Find the slope $b$ of the regression line.`,
+      )}, and $r$ has already been shown to be significant. Find the slope $b$ of the regression line $y' = a + bx$.`,
       [
         `Sums table: ${sumsLine(s)}`,
         `${ssLine(s)}`,
@@ -1156,10 +1205,10 @@ export const ch10Generators: Record<string, () => PracticeProblem> = {
       10,
       "reg-predict",
       "Prediction with y'",
-      `For ${ctx.who}, ${ctx.x} is $x$ (${ctx.xUnit}) and ${ctx.y} is $y$ (${ctx.yUnit}). The pairs are ${pairsLine(
+      `${ctx.setup} ${ctx.variables} The paired data are ${pairsLine(
         xs,
         ys
-      )}, and $r$ is significant. Using the regression line, predict $y$ when $x = ${x0}$.`,
+      )}, and $r$ has already been shown to be significant, so the regression line $y' = a + bx$ may be used. ${ctx.predict(x0)}`,
       [
         `Sums table: ${sumsLine(s)}`,
         `$b = \\dfrac{SS_{xy}}{SS_{x}} = \\dfrac{${round(s.SSxy, 4)}}{${round(s.SSx, 4)}} = ${round(b, 4)}$`,

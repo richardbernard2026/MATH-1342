@@ -21,8 +21,8 @@ import {
  *
  * On variety: each topic varies along three independent axes, not just one.
  *   1. the NUMBERS
- *   2. the WORDING — several phrasings of the same question
- *   3. the QUESTION FORM — which unknown is asked for, and sometimes whether
+ *   2. the WORDING, several phrasings of the same question
+ *   3. the QUESTION FORM, which unknown is asked for, and sometimes whether
  *      it is asked forwards or backwards
  * Plus a shared bank of cover stories, so the same computation shows up as
  * commute times, then rainfall, then repair costs. That last axis matters more
@@ -117,40 +117,43 @@ topicsByChapter[10] = ch10Topics;
 /**
  * Scenarios reused across the numeric generators.
  *
- * `plural` is the thing being measured, `unit` how it is measured, `who` the
- * source of the data. Keeping them separate means one bank of 20 dresses every
- * data-set question in the app.
+ * `plural` is the thing being measured and `short` is its singular form, `unit`
+ * is how it is measured, `who` is the organisation that collected the data, and
+ * `item` is the individual thing each measurement came from. Keeping all five
+ * separate is what lets one bank of 20 stories dress every data-set question in
+ * the app WITHOUT bending a sentence out of shape: every slot is written so the
+ * surrounding words agree with it.
  */
-type Ctx = { plural: string; unit: string; who: string; short: string };
+type Ctx = { plural: string; short: string; unit: string; who: string; item: string };
 
 const CONTEXTS: Ctx[] = [
-  { plural: "commute times", unit: "minutes", who: "employees at a logistics firm", short: "commute time" },
-  { plural: "daily rainfall totals", unit: "millimeters", who: "a weather station", short: "rainfall" },
-  { plural: "repair costs", unit: "dollars", who: "an auto shop", short: "repair cost" },
-  { plural: "wait times", unit: "minutes", who: "patients in a clinic", short: "wait time" },
-  { plural: "battery lives", unit: "hours", who: "a phone testing lab", short: "battery life" },
-  { plural: "delivery distances", unit: "miles", who: "a courier company", short: "distance" },
-  { plural: "exam scores", unit: "points", who: "a statistics section", short: "score" },
-  { plural: "weekly hours worked", unit: "hours", who: "part-time staff", short: "hours worked" },
-  { plural: "heights of seedlings", unit: "centimeters", who: "a greenhouse trial", short: "height" },
-  { plural: "call durations", unit: "seconds", who: "a support center", short: "call duration" },
-  { plural: "monthly electricity bills", unit: "dollars", who: "households on one street", short: "bill" },
-  { plural: "ages", unit: "years", who: "members of a hiking club", short: "age" },
-  { plural: "protein contents", unit: "grams", who: "a nutrition label survey", short: "protein" },
-  { plural: "reaction times", unit: "milliseconds", who: "a psychology study", short: "reaction time" },
-  { plural: "package weights", unit: "ounces", who: "a shipping counter", short: "weight" },
-  { plural: "gas mileages", unit: "miles per gallon", who: "a fleet of rental cars", short: "mileage" },
-  { plural: "ticket prices", unit: "dollars", who: "a concert resale site", short: "price" },
-  { plural: "temperatures at noon", unit: "degrees", who: "a rooftop sensor", short: "temperature" },
-  { plural: "download speeds", unit: "megabits per second", who: "an internet survey", short: "speed" },
-  { plural: "pages read per day", unit: "pages", who: "a reading challenge", short: "pages" },
+  { plural: "commute times", short: "commute time", unit: "minutes", who: "a logistics firm", item: "employees" },
+  { plural: "monthly rainfall totals", short: "monthly rainfall total", unit: "millimeters", who: "a weather station", item: "months" },
+  { plural: "repair costs", short: "repair cost", unit: "dollars", who: "an auto shop", item: "repair jobs" },
+  { plural: "wait times", short: "wait time", unit: "minutes", who: "a walk-in clinic", item: "patients" },
+  { plural: "battery lifetimes", short: "battery lifetime", unit: "hours", who: "a phone testing lab", item: "batteries" },
+  { plural: "delivery distances", short: "delivery distance", unit: "miles", who: "a courier company", item: "deliveries" },
+  { plural: "exam scores", short: "exam score", unit: "points", who: "a statistics instructor", item: "students" },
+  { plural: "weekly workloads", short: "weekly workload", unit: "hours", who: "a staffing office", item: "part-time employees" },
+  { plural: "seedling heights", short: "seedling height", unit: "centimeters", who: "a greenhouse trial", item: "plants" },
+  { plural: "call durations", short: "call duration", unit: "seconds", who: "a support center", item: "calls" },
+  { plural: "monthly electricity bills", short: "monthly electricity bill", unit: "dollars", who: "a utility company", item: "households" },
+  { plural: "ages", short: "age", unit: "years", who: "a hiking club", item: "members" },
+  { plural: "protein amounts", short: "protein amount", unit: "grams", who: "a nutrition survey", item: "snack bars" },
+  { plural: "reaction times", short: "reaction time", unit: "milliseconds", who: "a psychology lab", item: "volunteers" },
+  { plural: "package weights", short: "package weight", unit: "ounces", who: "a shipping counter", item: "packages" },
+  { plural: "fuel economy readings", short: "fuel economy reading", unit: "miles per gallon", who: "a rental car fleet", item: "vehicles" },
+  { plural: "ticket prices", short: "ticket price", unit: "dollars", who: "a concert resale site", item: "listings" },
+  { plural: "noon temperatures", short: "noon temperature", unit: "degrees", who: "a rooftop sensor", item: "days" },
+  { plural: "download speeds", short: "download speed", unit: "megabits per second", who: "an internet survey", item: "homes" },
+  { plural: "daily reading totals", short: "daily reading total", unit: "pages", who: "a school reading program", item: "readers" },
 ];
 
 /**
  * Tolerance for an answer that is a probability or an area.
  *
  * Generous enough for Table E rounding, but never as large as the answer
- * itself — otherwise a tail area of 0.0062 with a flat tolerance of 0.01 would
+ * itself. Otherwise a tail area of 0.0062 with a flat tolerance of 0.01 would
  * accept a typed 0, marking "I have no idea" as correct. It tightens near
  * BOTH ends, since an area of 0.9938 is just as easy to confuse with 1.
  */
@@ -159,13 +162,13 @@ function areaTol(answer: number): number {
   return Math.max(0.0008, Math.min(0.01, 0.25 * edge));
 }
 
-/** "A courier company recorded delivery distances (in miles) for 7 routes." */
-function setup(c: Ctx, n: number, itemWord = "values"): string {
+/** "A courier company recorded delivery distances (in miles) for 7 deliveries." */
+function setup(c: Ctx, n: number): string {
   const openers = [
-    `${cap(c.who)} recorded ${c.plural} (in ${c.unit}) for ${n} ${itemWord}`,
-    `A study of ${c.who} collected ${n} ${c.plural} (in ${c.unit})`,
-    `${cap(c.who)} logged ${c.plural}, measured in ${c.unit}, for ${n} ${itemWord}`,
-    `${n} ${c.plural} (in ${c.unit}) were recorded by ${c.who}`,
+    `${cap(c.who)} recorded ${c.plural} (in ${c.unit}) for ${n} ${c.item}`,
+    `In a study of ${n} ${c.item}, ${c.who} recorded the ${c.plural} (in ${c.unit})`,
+    `${cap(c.who)} logged ${n} ${c.plural}, measured in ${c.unit}`,
+    `${cap(c.who)} measured ${c.plural}, in ${c.unit}, for ${n} ${c.item}`,
   ];
   return pick(openers);
 }
@@ -520,7 +523,7 @@ const generators: Record<string, () => PracticeProblem> = {
         2,
         "classwidth",
         "Class Width",
-        `${setup(c, 30, "observations")}. The smallest value is ${lo} ${c.unit} and the largest is ${hi} ${c.unit}. If each class is ${width} ${c.unit} wide, how many classes are needed to cover all the data?`,
+        `${setup(c, 30)}. The smallest value is ${lo} ${c.unit} and the largest is ${hi} ${c.unit}. If each class is ${width} ${c.unit} wide, how many classes are needed to cover all the data?`,
         [
           `$\\text{range} = ${hi} - ${lo} = ${range}$`,
           `Counting both endpoints, the classes must span $${range} + 1 = ${range + 1}$ values.`,
@@ -537,8 +540,8 @@ const generators: Record<string, () => PracticeProblem> = {
       "classwidth",
       "Class Width",
       pick([
-        `${setup(c, 30, "observations")}. The values run from ${lo} to ${hi} ${c.unit}. Using ${k} classes, find the class width.`,
-        `A grouped frequency distribution of ${c.plural} uses ${k} classes. The smallest value is ${lo} and the largest is ${hi}. Find the class width.`,
+        `${setup(c, 30)}. The values run from ${lo} to ${hi} ${c.unit}. Using ${k} classes, find the class width.`,
+        `A grouped frequency distribution of ${c.plural} uses ${k} classes. The smallest value is ${lo} ${c.unit} and the largest is ${hi} ${c.unit}. Find the class width.`,
         `To organize ${c.plural} ranging from ${lo} to ${hi} ${c.unit} into ${k} classes, what class width should you use?`,
       ]),
       [
@@ -647,7 +650,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "Cumulative & Relative Frequency",
       pick([
         `A frequency distribution of ${c.plural} has class frequencies ${list(f)}, totaling ${total}. Find the ${asked}.`,
-        `${cap(c.who)} organized ${c.plural} into ${k} classes with frequencies ${list(f)} (total ${total}). Find the ${asked}.`,
+        `${cap(c.who)} organized the ${c.plural} into ${k} classes with frequencies ${list(f)}, for a total of ${total}. Find the ${asked}.`,
         `The classes of a distribution have frequencies ${list(f)}. With $n = ${total}$, find the ${asked}.`,
       ]),
       steps,
@@ -724,8 +727,8 @@ const generators: Record<string, () => PracticeProblem> = {
       "Mean, Median, Mode",
       pick([
         `${setup(c, n)}: ${list(data)}. Find the ${which}.`,
-        `The ${c.plural} below were recorded in ${c.unit}: ${list(data)}. What is the ${which}?`,
-        `Find the ${which} of these ${n} ${c.plural} (${c.unit}): ${list(data)}`,
+        `The ${c.plural} below were recorded by ${c.who}, in ${c.unit}: ${list(data)}. What is the ${which}?`,
+        `Find the ${which} of these ${n} ${c.plural} (in ${c.unit}): ${list(data)}`,
       ]),
       steps,
       answer,
@@ -771,7 +774,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "Variance & Standard Deviation",
       pick([
         `A SAMPLE of ${c.plural} (in ${c.unit}) was collected: ${list(data)}. Find the ${which}. Round to 2 or 3 decimals.`,
-        `${setup(c, n)}. Treating these as a SAMPLE: ${list(data)}, find the ${which}. Round to 2 or 3 decimals.`,
+        `${setup(c, n)}. Treating these values as a SAMPLE: ${list(data)}, find the ${which}. Round to 2 or 3 decimals.`,
         `For the SAMPLE ${list(data)}, find the ${which}. Round to 2 or 3 decimals.`,
       ]),
       steps,
@@ -799,7 +802,7 @@ const generators: Record<string, () => PracticeProblem> = {
           3,
           "rules",
           "Empirical Rule & Chebyshev",
-          `${cap(c.plural)} are bell-shaped with mean ${mean} ${c.unit} and standard deviation ${sd} ${c.unit}. About ${pct}% of the values fall between two numbers. Find the ${upper ? "UPPER" : "LOWER"} one.`,
+          `${cap(c.plural)} recorded by ${c.who} form a bell-shaped distribution with a mean of ${mean} ${c.unit} and a standard deviation of ${sd} ${c.unit}. About ${pct}% of the values fall between two numbers. Find the ${upper ? "UPPER" : "LOWER"} one.`,
           [
             `About ${pct}% of a bell-shaped distribution lies within ${k} standard deviation${k > 1 ? "s" : ""} of the mean.`,
             `$\\mu ${upper ? "+" : "-"} ${k}\\sigma = ${mean} ${upper ? "+" : "-"} ${k}(${sd}) = ${answer}$`,
@@ -813,7 +816,7 @@ const generators: Record<string, () => PracticeProblem> = {
         3,
         "rules",
         "Empirical Rule & Chebyshev",
-        `${cap(c.plural)} form a bell-shaped distribution with mean ${mean} ${c.unit} and standard deviation ${sd} ${c.unit}. Approximately what percent of values fall between ${mean - k * sd} and ${mean + k * sd} ${c.unit}? Answer as a number like 68.`,
+        `${cap(c.plural)} recorded by ${c.who} form a bell-shaped distribution with a mean of ${mean} ${c.unit} and a standard deviation of ${sd} ${c.unit}. Approximately what percent of the values fall between ${mean - k * sd} and ${mean + k * sd} ${c.unit}? Answer as a number like 68.`,
         [
           `$${mean - k * sd}$ and $${mean + k * sd}$ are exactly $${k}$ standard deviation${k > 1 ? "s" : ""} below and above the mean.`,
           `The Empirical Rule gives approximately $${pct}\\%$ within $${k}\\sigma$.`,
@@ -831,7 +834,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "rules",
       "Empirical Rule & Chebyshev",
       pick([
-        `${cap(c.plural)} have mean ${mean} ${c.unit} and standard deviation ${sd} ${c.unit}. The shape is unknown. Using Chebyshev's theorem, AT LEAST what percent of values fall between ${mean - k * sd} and ${mean + k * sd} ${c.unit}?`,
+        `${cap(c.plural)} recorded by ${c.who} have a mean of ${mean} ${c.unit} and a standard deviation of ${sd} ${c.unit}. The shape of the distribution is unknown. Using Chebyshev's theorem, AT LEAST what percent of the values fall between ${mean - k * sd} and ${mean + k * sd} ${c.unit}?`,
         `Using Chebyshev's theorem, at least what percent of any data set lies within ${k} standard deviations of the mean?`,
       ]),
       [
@@ -857,7 +860,7 @@ const generators: Record<string, () => PracticeProblem> = {
         3,
         "zpos",
         "z-scores",
-        `${cap(c.plural)} have mean ${mean} ${c.unit} and standard deviation ${sd} ${c.unit}. Find the ${c.short} whose z-score is ${z}.`,
+        `${cap(c.plural)} recorded by ${c.who} have a mean of ${mean} ${c.unit} and a standard deviation of ${sd} ${c.unit}. Find the ${c.short} whose z-score is ${z}.`,
         [
           `$z = \\dfrac{x - \\bar{x}}{s}$, so $x = \\bar{x} + z s$`,
           `$x = ${mean} + (${z})(${sd}) = ${round(value, 3)}$`,
@@ -894,7 +897,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "zpos",
       "z-scores",
       pick([
-        `${cap(c.plural)} have mean ${mean} ${c.unit} and standard deviation ${sd} ${c.unit}. Find the z-score for a ${c.short} of ${round(value, 2)} ${c.unit}.`,
+        `${cap(c.plural)} recorded by ${c.who} have a mean of ${mean} ${c.unit} and a standard deviation of ${sd} ${c.unit}. Find the z-score for a ${c.short} of ${round(value, 2)} ${c.unit}.`,
         `A data set of ${c.plural} has $\\bar{x} = ${mean}$ and $s = ${sd}$. Convert the value ${round(value, 2)} to a z-score.`,
         `How many standard deviations from the mean is ${round(value, 2)}, if the mean is ${mean} and the standard deviation is ${sd}?`,
       ]),
@@ -952,7 +955,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "Quartiles & Outliers",
       pick([
         `${setup(c, n)}: ${list(data)}. Find ${which}.`,
-        `For these ${c.plural} (in ${c.unit}): ${list(data)}. Find ${which}.`,
+        `A list of ${c.plural} (in ${c.unit}) reads ${list(data)}. Find ${which}.`,
         `Given the data ${list(data)}, determine ${which}.`,
       ]),
       steps,
@@ -1131,13 +1134,16 @@ const generators: Record<string, () => PracticeProblem> = {
   },
 
   addition: () => {
+    // `a`/`b` follow a plural count ("120 want email offers"), `aOne`/`bOne`
+    // follow a single chosen individual ("the customer wants email offers").
+    // Two fields instead of one is the whole reason the sentence agrees.
     const scenarios = [
-      { total: "customers", a: "want email offers", b: "want text offers", both: "want both" },
-      { total: "students", a: "take a lab science", b: "take a foreign language", both: "take both" },
-      { total: "commuters", a: "ride the bus", b: "ride the train", both: "use both" },
-      { total: "households", a: "own a dog", b: "own a cat", both: "own both" },
-      { total: "employees", a: "work remotely", b: "work weekends", both: "do both" },
-      { total: "diners", a: "ordered an appetizer", b: "ordered dessert", both: "ordered both" },
+      { group: "customers", one: "customer", a: "want email offers", b: "want text offers", both: "want both", aOne: "wants email offers", bOne: "wants text offers" },
+      { group: "students", one: "student", a: "take a lab science", b: "take a foreign language", both: "take both", aOne: "takes a lab science", bOne: "takes a foreign language" },
+      { group: "commuters", one: "commuter", a: "ride the bus", b: "ride the train", both: "use both", aOne: "rides the bus", bOne: "rides the train" },
+      { group: "households", one: "household", a: "own a dog", b: "own a cat", both: "own both", aOne: "owns a dog", bOne: "owns a cat" },
+      { group: "employees", one: "employee", a: "work remotely", b: "work weekends", both: "do both", aOne: "works remotely", bOne: "works weekends" },
+      { group: "diners", one: "diner", a: "ordered an appetizer", b: "ordered dessert", both: "ordered both", aOne: "ordered an appetizer", bOne: "ordered dessert" },
     ];
     const s = pick(scenarios);
     const total = pick([100, 150, 200, 250, 300, 400, 500]);
@@ -1160,8 +1166,8 @@ const generators: Record<string, () => PracticeProblem> = {
       "addition",
       "Addition Rule",
       overlaps
-        ? `Out of ${total} ${s.total}, ${countA} ${s.a}, ${countB} ${s.b}, and ${both} ${s.both}. Find the probability that a randomly chosen one ${s.a} OR ${s.b}.`
-        : `Out of ${total} ${s.total}, ${countA} ${s.a} and ${countB} ${s.b}. No one does both. Find the probability that a randomly chosen one ${s.a} OR ${s.b}.`,
+        ? `Of the ${total} ${s.group} surveyed, ${countA} ${s.a}, ${countB} ${s.b}, and ${both} ${s.both}. If one ${s.one} is selected at random, find the probability that the ${s.one} ${s.aOne} OR ${s.bOne}.`
+        : `Of the ${total} ${s.group} surveyed, ${countA} ${s.a} and ${countB} ${s.b}. None of them do both. If one ${s.one} is selected at random, find the probability that the ${s.one} ${s.aOne} OR ${s.bOne}.`,
       [
         `$P(A) = \\dfrac{${countA}}{${total}} = ${round(pA, 4)}$`,
         `$P(B) = \\dfrac{${countB}}{${total}} = ${round(pB, 4)}$`,
@@ -1203,11 +1209,14 @@ const generators: Record<string, () => PracticeProblem> = {
       );
     }
 
+    // `item` names what is actually in the container, so the sentence never has
+    // to fall back on the word "items", and `good` is an adjective so that both
+    // "3 of which are charged" and "both are charged" read correctly.
     const containers = pick([
-      { box: "a box of raffle tickets", good: "winners", n: pick([10, 12, 15, 20]) },
-      { box: "a drawer of batteries", good: "charged", n: pick([8, 10, 12, 16]) },
-      { box: "a bin of light bulbs", good: "working", n: pick([9, 12, 15, 18]) },
-      { box: "a deck of prize cards", good: "prizes", n: pick([10, 14, 20, 25]) },
+      { box: "A box holds", item: "raffle tickets", good: "winners", n: pick([10, 12, 15, 20]) },
+      { box: "A drawer holds", item: "batteries", good: "charged", n: pick([8, 10, 12, 16]) },
+      { box: "A bin holds", item: "light bulbs", good: "working", n: pick([9, 12, 15, 18]) },
+      { box: "A tray holds", item: "prize cards", good: "winners", n: pick([10, 14, 20, 25]) },
     ]);
     const total = containers.n;
     const good = randInt(3, Math.max(3, Math.floor(total / 2)));
@@ -1219,7 +1228,7 @@ const generators: Record<string, () => PracticeProblem> = {
         4,
         "multiplication",
         "Multiplication Rule",
-        `${cap(containers.box)} holds ${total} items, ${good} of which are ${containers.good}. Two are drawn WITH replacement. Find the probability that both are ${containers.good}.`,
+        `${containers.box} ${total} ${containers.item}, ${good} of which are ${containers.good}. Two are drawn at random WITH replacement. Find the probability that both are ${containers.good}.`,
         [
           `With replacement, the second draw sees the same box, so the events are independent.`,
           `$P = \\dfrac{${good}}{${total}} \\times \\dfrac{${good}}{${total}} = ${answer}$`,
@@ -1236,7 +1245,7 @@ const generators: Record<string, () => PracticeProblem> = {
       4,
       "multiplication",
       "Multiplication Rule",
-      `${cap(containers.box)} holds ${total} items, ${good} of which are ${containers.good}. Two are drawn WITHOUT replacement. Find the probability that both are ${containers.good}.`,
+      `${containers.box} ${total} ${containers.item}, ${good} of which are ${containers.good}. Two are drawn at random WITHOUT replacement. Find the probability that both are ${containers.good}.`,
       [
         `$P(\\text{1st is } ${containers.good}) = \\dfrac{${good}}{${total}} = ${round(p1, 4)}$`,
         `Without replacement, both counts drop by one:`,
@@ -1252,11 +1261,13 @@ const generators: Record<string, () => PracticeProblem> = {
     const form = pick(["percent", "table"] as const);
 
     if (form === "percent") {
+      // Plural forms follow a percentage of the whole group; the singular forms
+      // follow the one adult who has been picked out of it.
       const s = pick([
-        { a: "visited a therapist", b: "used a non-prescription sleep aid" },
-        { a: "owns a bicycle", b: "commutes by bike at least weekly" },
-        { a: "subscribes to the newsletter", b: "made a purchase this month" },
-        { a: "attended the review session", b: "passed the exam" },
+        { a: "visited a therapist", b: "used a non-prescription sleep aid", aOne: "visited a therapist", bOne: "used a non-prescription sleep aid" },
+        { a: "own a bicycle", b: "commute by bike at least weekly", aOne: "owns a bicycle", bOne: "commutes by bike at least weekly" },
+        { a: "subscribe to the newsletter", b: "made a purchase this month", aOne: "subscribes to the newsletter", bOne: "made a purchase this month" },
+        { a: "attended the review session", b: "passed the exam", aOne: "attended the review session", bOne: "passed the exam" },
       ]);
       const pA = pick([0.2, 0.25, 0.3, 0.4, 0.45, 0.5]);
       const pB = pick([0.3, 0.35, 0.4, 0.5, 0.55]);
@@ -1267,11 +1278,11 @@ const generators: Record<string, () => PracticeProblem> = {
         4,
         "conditional",
         "Conditional Probability",
-        `Among all adults surveyed, ${round(pA * 100, 1)}% ${s.a}, ${round(pB * 100, 1)}% ${s.b}, and ${round(pBoth * 100, 1)}% did both. Given that a randomly chosen adult ${s.a}, find the probability that the person also ${s.b}.`,
+        `In a survey of adults, ${round(pA * 100, 1)}% ${s.a}, ${round(pB * 100, 1)}% ${s.b}, and ${round(pBoth * 100, 1)}% did both. If one adult is selected at random and that adult ${s.aOne}, find the probability that the same adult also ${s.bOne}.`,
         [
           `$P(B \\mid A) = \\dfrac{P(A \\text{ and } B)}{P(A)}$`,
           `$= \\dfrac{${pBoth}}{${pA}} = ${answer}$`,
-          `Note the denominator is $P(A)$, not the overall total: you are now working only inside the group that ${s.a}.`,
+          `Note the denominator is $P(A)$, not the overall total: you are now working only inside the group who ${s.a}.`,
         ],
         answer,
         0.006
@@ -1279,10 +1290,12 @@ const generators: Record<string, () => PracticeProblem> = {
     }
 
     // Two-way table.
+    // `rDesc` and `cDesc` are the same categories written as verb phrases, so
+    // the question can say "is a freshman" rather than "is freshman".
     const rows = pick([
-      { r: ["Freshman", "Sophomore"], c: ["Lives on campus", "Lives off campus"] },
-      { r: ["Full-time", "Part-time"], c: ["Has insurance", "No insurance"] },
-      { r: ["Male", "Female"], c: ["Prefers tea", "Prefers coffee"] },
+      { r: ["Freshman", "Sophomore"], c: ["Lives on campus", "Lives off campus"], rDesc: ["is a freshman", "is a sophomore"], cDesc: ["lives on campus", "lives off campus"] },
+      { r: ["Full-time", "Part-time"], c: ["Has insurance", "No insurance"], rDesc: ["is a full-time student", "is a part-time student"], cDesc: ["has insurance", "has no insurance"] },
+      { r: ["Male", "Female"], c: ["Prefers tea", "Prefers coffee"], rDesc: ["is male", "is female"], cDesc: ["prefers tea", "prefers coffee"] },
     ]);
     const a11 = randInt(8, 40);
     const a12 = randInt(8, 40);
@@ -1298,7 +1311,7 @@ const generators: Record<string, () => PracticeProblem> = {
       4,
       "conditional",
       "Conditional Probability",
-      `A survey produced this table:\n\n| | ${rows.c[0]} | ${rows.c[1]} |\n|---|---|---|\n| ${rows.r[0]} | ${a11} | ${a12} |\n| ${rows.r[1]} | ${a21} | ${a22} |\n\nGiven that a randomly chosen person ${givenRow ? `is ${rows.r[0].toLowerCase()}` : `${rows.c[0].toLowerCase()}`}, find the probability that the person ${givenRow ? `${rows.c[0].toLowerCase()}` : `is ${rows.r[0].toLowerCase()}`}. Give a decimal.`,
+      `A survey produced this table:\n\n| | ${rows.c[0]} | ${rows.c[1]} |\n|---|---|---|\n| ${rows.r[0]} | ${a11} | ${a12} |\n| ${rows.r[1]} | ${a21} | ${a22} |\n\nIf one person is selected at random and that person ${givenRow ? rows.rDesc[0] : rows.cDesc[0]}, find the probability that the person ${givenRow ? rows.cDesc[0] : rows.rDesc[0]}. Give a decimal.`,
       [
         `Conditioning restricts you to one row or column, and that becomes the new denominator.`,
         givenRow
@@ -1318,6 +1331,8 @@ const generators: Record<string, () => PracticeProblem> = {
       { n: "servers", verb: "goes offline", event: "at least one stays online" },
       { n: "seeds", verb: "fails to sprout", event: "at least one sprouts" },
       { n: "smoke alarms", verb: "fails to sound", event: "at least one sounds" },
+      { n: "backup drives", verb: "fails to restore", event: "at least one restores" },
+      { n: "ticket machines", verb: "jams", event: "at least one keeps working" },
     ]);
     const n = randInt(2, 5);
     const pFail = pick([0.1, 0.15, 0.2, 0.25, 0.3, 0.35]);
@@ -1328,7 +1343,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "atleastone",
       "At Least One",
       pick([
-        `${n} ${s.n} operate independently. Each ${s.verb} with probability ${pFail}. Find the probability that ${s.event}.`,
+        `A system contains ${n} ${s.n} that operate independently. Each one ${s.verb} with probability ${pFail}. Find the probability that ${s.event}.`,
         `A system uses ${n} independent ${s.n}, each of which ${s.verb} with probability ${pFail}. What is the probability that ${s.event}?`,
       ]),
       [
@@ -1430,17 +1445,51 @@ const generators: Record<string, () => PracticeProblem> = {
   },
 
   "binomial-exact": () => {
+    // Each cover story writes its OWN two sentences rather than being poured
+    // into one shared frame. A shared frame is what produced wreckage like
+    // "each independently is answered within 30 seconds": the frame wanted an
+    // active verb and the story supplied a passive one. `lead` states the rate
+    // the way the course states it, `sample` says how many are taken, and
+    // `did` finishes "... of them ___" in whatever voice that story needs.
     const story = pick([
-      { n: "students", event: "passes on the first attempt" },
-      { n: "customers", event: "opens the email" },
-      { n: "seeds", event: "germinates" },
-      { n: "free throws", event: "goes in" },
-      { n: "calls", event: "is answered within 30 seconds" },
-      { n: "parts", event: "passes inspection" },
+      {
+        lead: (pct: string) => `A study found that ${pct} of the students who take a certain certification exam pass on the first attempt.`,
+        sample: (k: number) => `If ${k} of these students are selected at random`,
+        did: "pass on the first attempt",
+      },
+      {
+        lead: (pct: string) => `A marketing team reports that ${pct} of its customers open a promotional email.`,
+        sample: (k: number) => `If ${k} customers are selected at random`,
+        did: "open the email",
+      },
+      {
+        lead: (pct: string) => `A seed company states that ${pct} of its seeds germinate.`,
+        sample: (k: number) => `If ${k} of these seeds are planted`,
+        did: "germinate",
+      },
+      {
+        lead: (pct: string) => `A basketball player makes ${pct} of her free throws.`,
+        sample: (k: number) => `If she takes ${k} free throws`,
+        did: "go in",
+      },
+      {
+        lead: (pct: string) => `A call center reports that ${pct} of incoming calls are answered within 30 seconds.`,
+        sample: (k: number) => `If ${k} calls are selected at random`,
+        did: "are answered within 30 seconds",
+      },
+      {
+        lead: (pct: string) => `A quality inspector finds that ${pct} of the parts coming off a line pass inspection.`,
+        sample: (k: number) => `If ${k} parts are selected at random`,
+        did: "pass inspection",
+      },
     ]);
     const n = randInt(6, 14);
     const p = pick([0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75]);
     const form = pick(["exact", "atmost", "atleast"] as const);
+    // Every p in the list is an exact percentage, so nothing is rounded away:
+    // the prompt states the rate the way the course states it and the worked
+    // steps still show the same number as a decimal.
+    const pct = `${round(p * 100, 0)}%`;
 
     // Keep x near the middle of the distribution. A far-tail x produces a
     // probability like 0.00002, which teaches nothing and cannot be graded
@@ -1456,7 +1505,7 @@ const generators: Record<string, () => PracticeProblem> = {
         5,
         "binomial-exact",
         "Binomial Probability",
-        `In a group of ${n} ${story.n}, each independently ${story.event} with probability ${p}. Find the probability that EXACTLY ${x} of them do.`,
+        `${story.lead(pct)} ${story.sample(n)}, find the probability that EXACTLY ${x} of them ${story.did}.`,
         [
           `$P(X = x) = \\binom{n}{x} p^x q^{n-x}$ with $n = ${n}$, $p = ${p}$, $x = ${x}$`,
           `$\\binom{${n}}{${x}} = ${nCr(n, x)}$`,
@@ -1478,7 +1527,7 @@ const generators: Record<string, () => PracticeProblem> = {
         5,
         "binomial-exact",
         "Binomial Probability",
-        `In a group of ${n} ${story.n}, each independently ${story.event} with probability ${p}. Find the probability that AT MOST ${x} of them do.`,
+        `${story.lead(pct)} ${story.sample(n)}, find the probability that AT MOST ${x} of them ${story.did}.`,
         [
           `"At most ${x}" means $X = 0, 1, \\ldots, ${x}$, so add those terms.`,
           terms.join(", "),
@@ -1494,7 +1543,7 @@ const generators: Record<string, () => PracticeProblem> = {
       5,
       "binomial-exact",
       "Binomial Probability",
-      `In a group of ${n} ${story.n}, each independently ${story.event} with probability ${p}. Find the probability that AT LEAST ${x} of them do.`,
+      `${story.lead(pct)} ${story.sample(n)}, find the probability that AT LEAST ${x} of them ${story.did}.`,
       [
         `"At least ${x}" is everything from ${x} up. It is quicker to subtract the other side.`,
         `$P(X \\ge ${x}) = 1 - P(X \\le ${x - 1})$`,
@@ -1507,15 +1556,20 @@ const generators: Record<string, () => PracticeProblem> = {
   },
 
   "binomial-meansd": () => {
+    // `rate` completes "... % of customers redeem a coupon", `unit` names the
+    // sample, and `count` names the random variable, so no sentence has to
+    // reuse a phrase in a slot it does not fit.
     const story = pick([
-      "customers who redeem a coupon",
-      "flights that arrive early",
-      "students who join the study group",
-      "devices that pass a stress test",
-      "voters who return a ballot",
+      { rate: "of customers redeem a coupon", unit: "customers", count: "the number who redeem the coupon" },
+      { rate: "of flights arrive early", unit: "flights", count: "the number that arrive early" },
+      { rate: "of students join the study group", unit: "students", count: "the number who join the group" },
+      { rate: "of devices pass a stress test", unit: "devices", count: "the number that pass the test" },
+      { rate: "of registered voters return a mail ballot", unit: "voters", count: "the number who return a ballot" },
     ]);
     const n = randInt(12, 60);
     const p = pick([0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+    // Every p here is an exact percentage, so stating it as one loses nothing.
+    const pct = `${round(p * 100, 0)}%`;
     const mean = n * p;
     const variance = n * p * (1 - p);
     const which = pick(["mean", "variance", "standard deviation"] as const);
@@ -1537,9 +1591,9 @@ const generators: Record<string, () => PracticeProblem> = {
       "binomial-meansd",
       "Binomial Mean & SD",
       pick([
-        `A binomial experiment counts ${story}, with $n = ${n}$ and $p = ${p}$. Find the ${which}.`,
+        `A survey finds that ${pct} ${story.rate}. For a random sample of ${n} ${story.unit}, find the ${which} of ${story.count}.`,
         `For a binomial distribution with $n = ${n}$ and $p = ${p}$, find the ${which}.`,
-        `${cap(story)} follow a binomial distribution with ${n} trials and success probability ${p}. Find the ${which}.`,
+        `In a random sample of ${n} ${story.unit}, ${story.count} is binomial with $p = ${p}$. Find the ${which}.`,
       ]),
       steps,
       answer,
@@ -1567,7 +1621,7 @@ const generators: Record<string, () => PracticeProblem> = {
         6,
         "area-from-z",
         "Area from a Value",
-        `${cap(c.plural)} are normally distributed with $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. Find the probability that a randomly chosen ${c.short} falls BETWEEN ${round(xLo, 2)} and ${round(xHi, 2)} ${c.unit}.`,
+        `${cap(c.plural)} are normally distributed with $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. If one ${c.short} is selected at random, find the probability that it falls BETWEEN ${round(xLo, 2)} and ${round(xHi, 2)} ${c.unit}.`,
         [
           `$z_1 = \\dfrac{${round(xLo, 2)} - ${mu}}{${sigma}} = ${round(zLo, 3)}$, $z_2 = \\dfrac{${round(xHi, 2)} - ${mu}}{${sigma}} = ${round(zHi, 3)}$`,
           `Table E areas: $${round(areaLo, 4)}$ and $${round(areaHi, 4)}$`,
@@ -1587,7 +1641,7 @@ const generators: Record<string, () => PracticeProblem> = {
       "area-from-z",
       "Area from a Value",
       pick([
-        `${cap(c.plural)} are normally distributed with $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. Find the probability that a randomly chosen ${c.short} is ${form === "left" ? "LESS" : "GREATER"} than ${round(X, 2)} ${c.unit}.`,
+        `${cap(c.plural)} are normally distributed with $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. If one ${c.short} is selected at random, find the probability that it is ${form === "left" ? "LESS" : "GREATER"} than ${round(X, 2)} ${c.unit}.`,
         `A normal distribution has $\\mu = ${mu}$ and $\\sigma = ${sigma}$. For $X = ${round(X, 2)}$, find the area to the ${form === "left" ? "LEFT" : "RIGHT"}, as a probability between 0 and 1.`,
       ]),
       [
@@ -1662,7 +1716,7 @@ const generators: Record<string, () => PracticeProblem> = {
         6,
         "clt",
         "Central Limit Theorem",
-        `${cap(c.plural)} have $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. Samples of size $n = ${n}$ are taken. Find the standard error of the sample mean.`,
+        `${cap(c.plural)} have $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. Random samples of ${n} ${c.item} are selected. Find the standard error of the sample mean.`,
         [
           `$\\sigma_{\\bar{x}} = \\dfrac{\\sigma}{\\sqrt{n}}$`,
           `$= \\dfrac{${sigma}}{\\sqrt{${n}}} = \\dfrac{${sigma}}{${Math.sqrt(n)}} = ${round(se, 4)}$`,
@@ -1687,7 +1741,7 @@ const generators: Record<string, () => PracticeProblem> = {
         6,
         "clt",
         "Central Limit Theorem",
-        `${cap(c.plural)} have $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. For a sample of $n = ${n}$, find the probability that the sample mean is LESS than ${xbarShown} ${c.unit}.`,
+        `${cap(c.plural)} have $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. If a random sample of ${n} ${c.item} is selected, find the probability that the sample mean is LESS than ${xbarShown} ${c.unit}.`,
         [
           `$\\sigma_{\\bar{x}} = \\dfrac{${sigma}}{\\sqrt{${n}}} = ${round(se, 4)}$`,
           `$z = \\dfrac{\\bar{x} - \\mu}{\\sigma_{\\bar{x}}} = \\dfrac{${xbarShown} - ${mu}}{${round(se, 4)}} = ${round(zExact, 3)}$`,
@@ -1702,7 +1756,7 @@ const generators: Record<string, () => PracticeProblem> = {
       6,
       "clt",
       "Central Limit Theorem",
-      `${cap(c.plural)} have $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. A sample of $n = ${n}$ has sample mean $\\bar{x} = ${xbarShown}$. Find the z-score for this sample mean.`,
+      `${cap(c.plural)} have $\\mu = ${mu}$ and $\\sigma = ${sigma}$ ${c.unit}. A random sample of ${n} ${c.item} has sample mean $\\bar{x} = ${xbarShown}$. Find the z-score for this sample mean.`,
       [
         `Use the standard error, NOT $\\sigma$, this is a sample mean, not a single value.`,
         `$\\sigma_{\\bar{x}} = \\dfrac{${sigma}}{\\sqrt{${n}}} = ${round(se, 4)}$`,

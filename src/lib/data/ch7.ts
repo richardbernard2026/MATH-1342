@@ -560,25 +560,169 @@ function tolAgainst(answer: number, wrongs: number[], cap = 0.05): number {
   return Math.min(cap, 0.25 * gap);
 }
 
-type Ctx = { plural: string; unit: string; who: string; short: string };
+/**
+ * A cover story, written so that every sentence it appears in is a sentence
+ * somebody would actually say.
+ *
+ * The earlier version of this file kept one shared frame and poured nouns into
+ * it, which produced things like "Count of days were recorded for a sample of
+ * metropolitan areas". Each story now supplies its own opening sentence plus
+ * the four noun phrases the generators need, and each generator writes a full
+ * sentence around them rather than concatenating slots.
+ *
+ * The wording targets are the ALEKS items pasted into the Chapter 7 deck
+ * ("A cell phone manufacturer has hired you to estimate the population mean of
+ * the battery lifetimes for all phones of their latest model", "The breaking
+ * strengths of cables produced by a certain manufacturer have a standard
+ * deviation of 81 pounds") and Worksheet 7 ("A random sample of 65 tables in a
+ * popular restaurant revealed an average bill of $15.09 per table").
+ */
+type Ctx = {
+  /** Opening sentence naming who is estimating what. Always ends in a period. */
+  intro: string;
+  /** Noun phrase after "a random sample of 65 ...". */
+  units: string;
+  /** How the mean is named, as in "the mean dinner bill". */
+  quantity: string;
+  /** The population, as in "the true mean bill for all tables at this restaurant". */
+  population: string;
+  /** Plural name for the measurements, as in "the population standard deviation of the dinner bills". */
+  measures: string;
+  /** Unit word that follows a number. */
+  unit: string;
+};
 
 const CONTEXTS: Ctx[] = [
-  { plural: "restaurant bills", unit: "dollars", who: "tables at a popular restaurant", short: "bill" },
-  { plural: "battery lifetimes", unit: "hours", who: "phones of one model", short: "lifetime" },
-  { plural: "breaking strengths", unit: "pounds", who: "cables from one manufacturer", short: "strength" },
-  { plural: "commute times", unit: "minutes", who: "employees at a logistics firm", short: "commute time" },
-  { plural: "river depths", unit: "feet", who: "points along a river", short: "depth" },
-  { plural: "repair costs", unit: "dollars", who: "vehicles at an auto shop", short: "repair cost" },
-  { plural: "daily rainfall totals", unit: "millimeters", who: "days at a weather station", short: "rainfall" },
-  { plural: "unhealthy air quality days", unit: "days", who: "metropolitan areas", short: "count of days" },
-  { plural: "holiday gift totals", unit: "dollars", who: "shoppers in a mall survey", short: "amount spent" },
-  { plural: "weights of adult giraffes", unit: "pounds", who: "giraffes at wildlife parks", short: "weight" },
-  { plural: "call durations", unit: "seconds", who: "calls to a support center", short: "call duration" },
-  { plural: "monthly electricity bills", unit: "dollars", who: "households on one street", short: "bill" },
-  { plural: "germination times", unit: "days", who: "seedlings in a greenhouse trial", short: "germination time" },
-  { plural: "download speeds", unit: "megabits per second", who: "homes in an internet survey", short: "speed" },
-  { plural: "checkout wait times", unit: "minutes", who: "customers at a grocery store", short: "wait time" },
-  { plural: "package weights", unit: "ounces", who: "parcels at a shipping counter", short: "weight" },
+  {
+    intro: "A popular restaurant wants to estimate the mean dinner bill for all of its tables.",
+    units: "tables",
+    quantity: "dinner bill",
+    population: "all tables at this restaurant",
+    measures: "dinner bills",
+    unit: "dollars",
+  },
+  {
+    intro:
+      "A cell phone manufacturer wants to estimate the mean battery lifetime for all phones of its latest model.",
+    units: "phones of this model",
+    quantity: "battery lifetime",
+    population: "all phones of this model",
+    measures: "battery lifetimes",
+    unit: "hours",
+  },
+  {
+    intro: "A cable manufacturer wants to estimate the mean breaking strength of the cables it produces.",
+    units: "newly manufactured cables",
+    quantity: "breaking strength",
+    population: "all cables produced by this manufacturer",
+    measures: "breaking strengths",
+    unit: "pounds",
+  },
+  {
+    intro: "A logistics firm wants to estimate the mean commute time of its employees.",
+    units: "employees",
+    quantity: "commute time",
+    population: "all employees at this firm",
+    measures: "commute times",
+    unit: "minutes",
+  },
+  {
+    intro: "A scientist wants to estimate the average depth of a river.",
+    units: "measurement sites along the river",
+    quantity: "depth",
+    population: "the whole river",
+    measures: "measured depths",
+    unit: "feet",
+  },
+  {
+    intro: "An auto shop wants to estimate the mean repair cost of the jobs it takes in.",
+    units: "repair invoices",
+    quantity: "repair cost",
+    population: "all repairs at this shop",
+    measures: "repair costs",
+    unit: "dollars",
+  },
+  {
+    intro: "A weather station wants to estimate the mean daily rainfall it records.",
+    units: "days",
+    quantity: "daily rainfall",
+    population: "all days at this station",
+    measures: "daily rainfall totals",
+    unit: "millimeters",
+  },
+  {
+    intro:
+      "An environmental agency wants to estimate the mean number of unhealthy air quality days a metropolitan area has in a year.",
+    units: "metropolitan areas",
+    quantity: "number of unhealthy days",
+    population: "all metropolitan areas in the country",
+    measures: "yearly counts",
+    unit: "days",
+  },
+  {
+    intro: "A retail group wants to estimate the mean amount a shopper spends on holiday gifts.",
+    units: "shoppers",
+    quantity: "amount spent on holiday gifts",
+    population: "all shoppers in the region",
+    measures: "amounts spent",
+    unit: "dollars",
+  },
+  {
+    intro: "A wildlife biologist wants to estimate the mean weight of adult male giraffes.",
+    units: "adult male giraffes",
+    quantity: "weight",
+    population: "all adult male giraffes in the parks studied",
+    measures: "recorded weights",
+    unit: "pounds",
+  },
+  {
+    intro: "A support center wants to estimate the mean length of the calls it handles.",
+    units: "recorded calls",
+    quantity: "call length",
+    population: "all calls to this support center",
+    measures: "call lengths",
+    unit: "seconds",
+  },
+  {
+    intro: "A utility company wants to estimate the mean monthly electricity bill of the households it serves.",
+    units: "households",
+    quantity: "monthly electricity bill",
+    population: "all households this utility serves",
+    measures: "monthly bills",
+    unit: "dollars",
+  },
+  {
+    intro: "A greenhouse wants to estimate the mean germination time of the seeds it plants.",
+    units: "seeds",
+    quantity: "germination time",
+    population: "all seeds of this variety",
+    measures: "germination times",
+    unit: "days",
+  },
+  {
+    intro: "An internet provider wants to estimate the mean download speed delivered to the homes on its network.",
+    units: "homes",
+    quantity: "download speed",
+    population: "all homes on this network",
+    measures: "download speeds",
+    unit: "megabits per second",
+  },
+  {
+    intro: "A grocery store wants to estimate the mean time a customer waits at the checkout.",
+    units: "customers",
+    quantity: "checkout wait time",
+    population: "all customers at this store",
+    measures: "checkout wait times",
+    unit: "minutes",
+  },
+  {
+    intro: "A shipping counter wants to estimate the mean weight of the parcels it accepts.",
+    units: "parcels",
+    quantity: "parcel weight",
+    population: "all parcels handled at this counter",
+    measures: "parcel weights",
+    unit: "ounces",
+  },
 ];
 
 function cap1(s: string) {
@@ -621,10 +765,10 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     const n = randInt(8, 240);
     const a = article(conf);
     const lead = pick([
-      `A researcher sampled ${n} ${c.who} and is building ${a} ${conf}% confidence interval for the mean ${c.short}.`,
-      `From a sample of ${n} ${c.who}, ${a} ${conf}% confidence interval for the mean ${c.short} is being constructed.`,
-      `${cap1(a)} ${conf}% confidence interval for the mean ${c.short} is being built from ${n} ${c.who}.`,
-      `An analyst reports ${a} ${conf}% confidence interval for the mean ${c.short}, based on ${n} ${c.who}.`,
+      `${c.intro} A random sample of ${n} ${c.units} is taken, and ${a} ${conf}% confidence interval for the mean ${c.quantity} is constructed from it.`,
+      `${c.intro} Based on a random sample of ${n} ${c.units}, ${a} ${conf}% confidence interval for the mean ${c.quantity} is being built.`,
+      `${c.intro} An analyst reports ${a} ${conf}% confidence interval for the mean ${c.quantity}, using a random sample of ${n} ${c.units}.`,
+      `${c.intro} ${cap1(a)} ${conf}% confidence interval for the mean ${c.quantity} is wanted, and a random sample of ${n} ${c.units} has already been collected.`,
     ]);
 
     if (form === "each") {
@@ -700,10 +844,10 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
       wrongs.push(Z_ONE_TAIL[conf]);
       const nz = randInt(31, 400);
       const zLead = pick([
-        `The mean ${c.short} is being estimated from ${nz} ${c.who}, and $\\sigma$ is known.`,
-        `${cap1(c.plural)} were measured for ${nz} ${c.who}, and the POPULATION standard deviation is known.`,
-        `You are estimating the mean ${c.short} from ${nz} ${c.who}, with $\\sigma$ given.`,
-        `A study of ${nz} ${c.who} reports the population standard deviation of the ${c.plural}.`,
+        `${c.intro} A random sample of ${nz} ${c.units} is selected, and the POPULATION standard deviation of the ${c.measures} is known.`,
+        `${c.intro} It is known that the population standard deviation of the ${c.measures} is $\\sigma$, and a random sample of ${nz} ${c.units} has been measured.`,
+        `${c.intro} A random sample of ${nz} ${c.units} is measured. Assume the population standard deviation of the ${c.measures} is known.`,
+        `${c.intro} The ${c.measures} have a known population standard deviation, and a random sample of ${nz} ${c.units} has been taken.`,
       ]);
       return P(
         "ci-critical",
@@ -736,7 +880,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     return P(
       "ci-critical",
       "Critical Values (Tables E and F)",
-      `${cap1(c.plural)} were recorded for a sample of size $n = ${n}$ ${c.who}, and $\\sigma$ is unknown. Using Table F, find $t_{\\alpha/2}$ for a ${conf}% confidence interval.`,
+      `${c.intro} A random sample of $n = ${n}$ ${c.units} is taken. The population standard deviation is UNKNOWN, so only the sample standard deviation $s$ is available. Using Table F, find $t_{\\alpha/2}$ for a ${conf}% confidence interval.`,
       [
         `$\\text{d.f.} = n - 1 = ${n} - 1 = ${df}$`,
         row === df
@@ -769,17 +913,18 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     const E = crit * se;
     const sym = known ? "\\sigma" : "s";
     const source = known
-      ? `the POPULATION standard deviation is $\\sigma = ${sd}$`
-      : `the SAMPLE standard deviation is $s = ${sd}$`;
+      ? `the POPULATION standard deviation of the ${c.measures} is $\\sigma = ${sd}$ ${c.unit}`
+      : `the SAMPLE standard deviation of the ${c.measures} is $s = ${sd}$ ${c.unit}`;
+    const lead = `${c.intro} A random sample of $n = ${n}$ ${c.units} is taken, and ${source}.`;
 
     if (Math.random() < 0.35) {
       return P(
         "ci-margin",
         "Standard Error vs Margin of Error",
-        `${cap1(c.plural)} were recorded for a sample of $n = ${n}$ ${c.who}, and ${source} ${c.unit}. Find the STANDARD ERROR only.`,
+        `${lead} Find the STANDARD ERROR only.`,
         [
           `$\\dfrac{${sym}}{\\sqrt{n}} = \\dfrac{${sd}}{\\sqrt{${n}}} = \\dfrac{${sd}}{${root}} = ${round(se, 4)}$`,
-          `Individual ${c.plural} vary by about ${sd} ${c.unit}, but the AVERAGE of ${n} of them varies by only about ${round(se, 2)}.`,
+          `Individual ${c.measures} vary by about ${sd} ${c.unit}, but the AVERAGE of ${n} of them varies by only about ${round(se, 2)}.`,
           `This is not yet a margin of error. Multiplying by the critical value is still to come.`,
         ],
         round(se, 4),
@@ -790,7 +935,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     return P(
       "ci-margin",
       "Standard Error vs Margin of Error",
-      `${cap1(c.plural)} were recorded for a sample of $n = ${n}$ ${c.who}, and ${source} ${c.unit}. Find the maximum error of estimate $E$ for a ${conf}% confidence interval.`,
+      `${lead} Find the maximum error of estimate $E$ for a ${conf}% confidence interval.`,
       [
         known
           ? `$\\sigma$ is given, so the critical value is $z_{\\alpha/2} = ${crit}$ from Table E.`
@@ -827,7 +972,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
         return P(
           "ci-mean-z",
           "z Interval for the Mean",
-          `A ${conf}% confidence interval for the mean ${c.short} is reported as $${lo} < \\mu < ${hi}$. Find the sample mean it was built from.`,
+          `${c.intro} A ${conf}% confidence interval for the mean ${c.quantity} is reported as $${lo} < \\mu < ${hi}$. Find the sample mean the interval was built from.`,
           [
             `The interval is $\\bar{x} \\pm E$, so $\\bar{x}$ sits exactly in the middle.`,
             `$\\bar{x} = \\dfrac{${lo} + ${hi}}{2} = ${mid}$`,
@@ -839,7 +984,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
       return P(
         "ci-mean-z",
         "z Interval for the Mean",
-        `A ${conf}% confidence interval for the mean ${c.short} is reported as $${lo} < \\mu < ${hi}$. Find the maximum error of estimate $E$.`,
+        `${c.intro} A ${conf}% confidence interval for the mean ${c.quantity} is reported as $${lo} < \\mu < ${hi}$. Find the maximum error of estimate $E$.`,
         [
           `$E$ is HALF the width of the interval, not the whole width.`,
           `$E = \\dfrac{${hi} - ${lo}}{2} = ${halfWidth}$`,
@@ -853,7 +998,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     return P(
       "ci-mean-z",
       "z Interval for the Mean",
-      `A random sample of $n = ${n}$ ${c.who} gave a mean ${c.short} of $${xbar}$ ${c.unit}. The POPULATION standard deviation is $\\sigma = ${sigma}$ ${c.unit}. Find the ${form.toUpperCase()} limit of the ${conf}% confidence interval for $\\mu$.`,
+      `${c.intro} A random sample of $n = ${n}$ ${c.units} gave a mean ${c.quantity} of $${xbar}$ ${c.unit}. It is known that the population standard deviation of the ${c.measures} is $\\sigma = ${sigma}$ ${c.unit}. Find the ${form.toUpperCase()} limit of the ${conf}% confidence interval for the true mean ${c.quantity} for ${c.population}.`,
       [
         `$\\sigma$ is given, so this is a $z$ interval. $z_{\\alpha/2} = ${z}$.`,
         `$\\dfrac{\\sigma}{\\sqrt{n}} = \\dfrac{${sigma}}{${Math.sqrt(n)}} = ${round(se, 4)}$`,
@@ -894,7 +1039,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     return P(
       "ci-mean-t",
       "t Interval for the Mean",
-      `A random sample of $n = ${n}$ ${c.who} gave a mean ${c.short} of $${xbar}$ ${c.unit} with a SAMPLE standard deviation of $s = ${s}$ ${c.unit}. Assume the population is approximately normal. Find the ${wantUpper ? "UPPER" : "LOWER"} limit of the ${conf}% confidence interval for $\\mu$.`,
+      `${c.intro} A random sample of $n = ${n}$ ${c.units} gave a mean ${c.quantity} of $${xbar}$ ${c.unit}, with a SAMPLE standard deviation of $s = ${s}$ ${c.unit}. The population standard deviation is unknown. Assume the ${c.measures} are approximately normally distributed. Find the ${wantUpper ? "UPPER" : "LOWER"} limit of the ${conf}% confidence interval for the true mean ${c.quantity} for ${c.population}.`,
       [
         `Only $s$ is given, so use $t$. $\\text{d.f.} = ${n} - 1 = ${df}$.`,
         row === df
@@ -937,7 +1082,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
       return CH(
         "ci-samplesize",
         "Sample Size for a Mean",
-        `A study needs the mean ${c.short} estimated to within $${E}$ ${c.unit} with ${conf}% confidence, and $\\sigma = ${sigma}$. If the requirement is tightened to within $${round(E / 2, 4)}$ instead, the required sample size...`,
+        `${c.intro} The estimate has to be accurate to within $${E}$ ${c.unit} with ${conf}% confidence, and $\\sigma = ${sigma}$ ${c.unit}. If the requirement is tightened to within $${round(E / 2, 4)}$ ${c.unit} instead, the required sample size...`,
         ["Multiplies by about 4", "Doubles", "Is cut in half", "Does not change"],
         0,
         [
@@ -951,7 +1096,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     return P(
       "ci-samplesize",
       "Sample Size for a Mean",
-      `How large a sample is needed to estimate the mean ${c.short} to within $${E}$ ${c.unit} with ${conf}% confidence, if $\\sigma = ${sigma}$ ${c.unit}?`,
+      `${c.intro} The estimate has to be accurate to within $${E}$ ${c.unit} of the true mean ${c.quantity} with ${conf}% confidence. A previous study found the population standard deviation of the ${c.measures} to be $${sigma}$ ${c.unit}. How large a sample of ${c.units} is needed?`,
       [
         `$z_{\\alpha/2} = ${z}$ for ${conf}% confidence.`,
         `$n = \\left(\\dfrac{z_{\\alpha/2}\\sigma}{E}\\right)^{2} = \\left(\\dfrac{${z} \\times ${sigma}}{${E}}\\right)^{2} = \\left(${round((z * sigma) / E, 4)}\\right)^{2} = ${round(raw, 4)}$`,
@@ -986,7 +1131,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
       return P(
         "t-area",
         "t Distribution Areas",
-        `A $t$ distribution has $${df}$ degrees of freedom. Find the area under the curve to the RIGHT of $t = ${a}$, to three decimal places.`,
+        `Consider a $t$ distribution with ${df} degrees of freedom. Compute $P(t > ${a})$. Round your answer to at least three decimal places.`,
         [
           `Area to the right $= 1 - $ area to the left.`,
           `$P(t > ${a}) = ${ans}$ with $\\text{d.f.} = ${df}$`,
@@ -1004,7 +1149,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
       return P(
         "t-area",
         "t Distribution Areas",
-        `A $t$ distribution has $${df}$ degrees of freedom. Compute $P(-${c} < t < ${c})$, to three decimal places.`,
+        `Consider a $t$ distribution with ${df} degrees of freedom. Compute $P(-${c} < t < ${c})$. Round your answer to at least three decimal places.`,
         [
           `$P(-${c} < t < ${c}) = P(t > -${c}) - P(t > ${c})$`,
           `By symmetry that is the same as $2 \\cdot P(t < ${c}) - 1$.`,
@@ -1024,7 +1169,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
       return P(
         "t-area",
         "t Distribution Areas",
-        `A $t$ distribution has $${df}$ degrees of freedom. Find the value $c$ such that $P(t > c) = ${area}$, to three decimal places.`,
+        `Consider a $t$ distribution with ${df} degrees of freedom. Find the value of $c$ such that $P(t > c) = ${area}$. Round your answer to at least three decimal places.`,
         [
           `You are given the area in the RIGHT tail and asked for the cutoff, so this runs the lookup backward.`,
           area < 0.5
@@ -1045,7 +1190,7 @@ export const ch7Generators: Record<string, () => PracticeProblem> = {
     return P(
       "t-area",
       "t Distribution Areas",
-      `A $t$ distribution has $${df}$ degrees of freedom. Find the value $c$ such that $P(-c < t < c) = ${level}$, to three decimal places.`,
+      `Consider a $t$ distribution with ${df} degrees of freedom. Find the value of $c$ such that $P(-c < t < c) = ${level}$. Round your answer to at least three decimal places.`,
       [
         `The two tails together hold $1 - ${level} = ${round(1 - level, 4)}$.`,
         `By symmetry each tail holds half of that: $${tail}$.`,

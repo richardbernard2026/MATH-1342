@@ -693,20 +693,131 @@ export const ch8Guided: GuidedExample[] = [
 
 /* ============================================================== generators */
 
-type Ctx = { what: string; unit: string; who: string };
+/**
+ * A cover story for a hypothesis test.
+ *
+ * Written as sentences rather than as slots. The earlier version poured a noun
+ * and a unit into one shared frame, which produced lines like "The mean prison
+ * term for randomly selected sentences has historically been 45 years" and,
+ * worse, "the mean wait time has increased 9 minutes".
+ *
+ * The pattern copied here is the ALEKS opener pasted into the Chapter 8 deck:
+ * a sentence that states where the historical value comes from, a sentence
+ * that says who suspects it has changed, then the sample. For example,
+ * "A chain of restaurants has historically had a mean wait time of 9 minutes
+ * for its customers", and "According to a report done by S & J Power, the mean
+ * lifetime of the light bulbs it manufactures is 55 months".
+ *
+ * Every `unit` here is one that reads sensibly for the hypothesised means the
+ * generators draw, which sit between 20 and 90.
+ */
+type Ctx = {
+  /** Sentence stating the historical or claimed mean. Ends in a period. */
+  setup: (k: number) => string;
+  /** Who is testing the claim, as in "the manager suspects ...". */
+  investigator: string;
+  /** How the mean is named, as in "the mean wait time". */
+  what: string;
+  /** Plural name for the measurements, as in "the population standard deviation of the wait times". */
+  measures: string;
+  /** Noun phrase after "a random sample of 44 ...". */
+  units: string;
+  /** Unit word that follows a number. */
+  unit: string;
+};
 
 const CTX: Ctx[] = [
-  { what: "wait time", unit: "minutes", who: "customers at a restaurant chain" },
-  { what: "lifetime", unit: "months", who: "light bulbs from one manufacturer" },
-  { what: "sodium level", unit: "mEq per liter", who: "healthy adults" },
-  { what: "completion time", unit: "minutes", who: "runs of a manufacturing process" },
-  { what: "commute distance", unit: "miles", who: "employees at a logistics firm" },
-  { what: "battery life", unit: "hours", who: "phones in a testing lab" },
-  { what: "monthly bill", unit: "dollars", who: "households on one street" },
-  { what: "repair cost", unit: "dollars", who: "cars at an auto shop" },
-  { what: "prison term", unit: "years", who: "randomly selected sentences" },
-  { what: "birth weight", unit: "pounds", who: "babies born at full term" },
+  {
+    setup: (k) => `A chain of restaurants has historically had a mean wait time of ${k} minutes for its customers.`,
+    investigator: "the manager",
+    what: "wait time",
+    measures: "wait times",
+    units: "customers",
+    unit: "minutes",
+  },
+  {
+    setup: (k) =>
+      `According to a report by a lighting company, the mean lifetime of the light bulbs it manufactures is ${k} months.`,
+    investigator: "a researcher for a consumer advocate group",
+    what: "lifetime",
+    measures: "lifetimes",
+    units: "bulbs",
+    unit: "months",
+  },
+  {
+    setup: (k) =>
+      `An electronics manufacturing process has historically had a mean completion time of ${k} minutes per run.`,
+    investigator: "a process engineer",
+    what: "completion time",
+    measures: "completion times",
+    units: "completion times under the new process",
+    unit: "minutes",
+  },
+  {
+    setup: (k) => `A logistics firm reports that its drivers have a mean commute distance of ${k} miles.`,
+    investigator: "an operations analyst",
+    what: "commute distance",
+    measures: "commute distances",
+    units: "drivers",
+    unit: "miles",
+  },
+  {
+    setup: (k) =>
+      `A company reports from its historical data that its employees spend a mean of ${k} minutes a day dealing with email.`,
+    investigator: "an independent consultant",
+    what: "time spent on email",
+    measures: "daily email times",
+    units: "employees",
+    unit: "minutes",
+  },
+  {
+    setup: (k) =>
+      `Last year the mean daily tips earned by servers at a restaurant chain was ${k} dollars.`,
+    investigator: "a district manager",
+    what: "daily tip total",
+    measures: "daily tip totals",
+    units: "servers",
+    unit: "dollars",
+  },
+  {
+    setup: (k) => `An auto shop advertises a mean repair cost of ${k} dollars for a standard service.`,
+    investigator: "a consumer reporter",
+    what: "repair cost",
+    measures: "repair costs",
+    units: "invoices",
+    unit: "dollars",
+  },
+  {
+    setup: (k) => `The average length of a prison term for a certain offense is reported to be ${k} years.`,
+    investigator: "a criminologist",
+    what: "prison term",
+    measures: "prison terms",
+    units: "sentences",
+    unit: "years",
+  },
+  {
+    setup: (k) => `A phone maker states that its latest model has a mean battery life of ${k} hours of video playback.`,
+    investigator: "a testing lab",
+    what: "battery life",
+    measures: "battery lifetimes",
+    units: "phones of this model",
+    unit: "hours",
+  },
+  {
+    setup: (k) =>
+      `A university reports that students in its introductory courses study a mean of ${k} minutes a night.`,
+    investigator: "an academic advisor",
+    what: "nightly study time",
+    measures: "nightly study times",
+    units: "students",
+    unit: "minutes",
+  },
 ];
+
+/** Sentence-initial capital for a noun phrase such as "the manager". */
+function cap1(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 const N = (
   topic: string,
@@ -726,14 +837,23 @@ const C = (
   steps: string[]
 ): PracticeProblem => ({ ch: 8, topic, topicLabel, prompt, steps, kind: "choice", answer, tol: 0, choices });
 
-/** Phrasings that force a particular tail. */
+/**
+ * Phrasings that force a particular tail.
+ *
+ * Every phrase here has to complete the sentence "the mean wait time ___ 9
+ * minutes". The bare participles that used to sit in this list ("has
+ * increased", "has decreased") do not, and produced "the mean wait time has
+ * increased 9 minutes". The replacements are the ones the deck actually uses:
+ * "is now greater than 9 minutes", "is now less than 11,475 km", "differs from
+ * 55 months".
+ */
 const WORDINGS: { phrase: string; sign: string; tail: "left" | "right" | "two" }[] = [
-  { phrase: "has increased", sign: ">", tail: "right" },
+  { phrase: "has increased above", sign: ">", tail: "right" },
   { phrase: "is greater than", sign: ">", tail: "right" },
   { phrase: "is now more than", sign: ">", tail: "right" },
-  { phrase: "has decreased", sign: "<", tail: "left" },
+  { phrase: "has dropped below", sign: "<", tail: "left" },
   { phrase: "is less than", sign: "<", tail: "left" },
-  { phrase: "is now smaller than", sign: "<", tail: "left" },
+  { phrase: "is now less than", sign: "<", tail: "left" },
   { phrase: "differs from", sign: "\\neq", tail: "two" },
   { phrase: "is not equal to", sign: "\\neq", tail: "two" },
   { phrase: "is different from", sign: "\\neq", tail: "two" },
@@ -755,7 +875,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return C(
       "hyp-setup",
       "Stating H0 and H1",
-      `The mean ${c.what} for ${c.who} has historically been ${k} ${c.unit}. A researcher believes the mean ${c.what} ${w.phrase} ${k} ${c.unit}. State the hypotheses.`,
+      `${c.setup(k)} ${cap1(c.investigator)} suspects that the mean ${c.what}, $\\mu$, ${w.phrase} ${k} ${c.unit} and wishes to carry out a hypothesis test. Part (a) asks you to state the hypotheses and identify the claim. Which pair is correct?`,
       [
         `$H_0: \\mu = ${k}$ and $H_1: \\mu > ${k}$`,
         `$H_0: \\mu = ${k}$ and $H_1: \\mu < ${k}$`,
@@ -778,7 +898,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return C(
       "tail-id",
       "Which Tail?",
-      `A test uses $H_1: \\mu ${w.sign} ${k}$. Identify the type of test and where the critical region goes.`,
+      `A hypothesis test about a population mean uses $H_0: \\mu = ${k}$ against $H_1: \\mu ${w.sign} ${k}$. Before part (b) can be worked, the type of test has to be settled. Which describes this test and where its critical region goes?`,
       [
         "Left-tailed, with the entire critical region in the left tail",
         "Right-tailed, with the entire critical region in the right tail",
@@ -804,7 +924,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return N(
       "z-critical",
       "Critical z Value",
-      `Find the POSITIVE critical value for a ${label} z test with $\\alpha = ${alpha}$. Use Table E and round to 2 decimals.`,
+      `A ${label} z test for a population mean is to be run at $\\alpha = ${alpha}$, and $\\sigma$ is known. Part (b) asks for the critical value(s). Using Table E, find the POSITIVE critical value, rounded to 2 decimals.`,
       [
         tails === 1
           ? `One-tailed, so all of $\\alpha = ${alpha}$ goes in one tail.`
@@ -829,7 +949,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return N(
       "z-testvalue",
       "z Test Value",
-      `The mean ${c.what} for ${c.who} is claimed to be ${mu} ${c.unit}, with $\\sigma = ${sigma}$. A sample of $n = ${n}$ gives $\\bar{X} = ${xbar}$. Compute the z test value, to 2 decimals.`,
+      `${c.setup(mu)} To test this, ${c.investigator} takes a random sample of ${n} ${c.units}. The mean ${c.what} for the sample is ${xbar} ${c.unit}. It is known that the population standard deviation of the ${c.measures} is ${sigma} ${c.unit}. Part (c) asks you to compute the test value. Find the value of the z test statistic, rounded to 2 decimals.`,
       [
         `$\\sigma$ is known and $n \\ge 30$, so this is a z test.`,
         `Standard error $= \\dfrac{${sigma}}{\\sqrt{${n}}} = ${round(se, 4)}$`,
@@ -869,7 +989,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return N(
       "z-pvalue",
       "P-value from z",
-      `A ${tail === "two" ? "two-tailed" : tail + "-tailed"} z test gives a test value of $z = ${z}$. Find the P-value using Table E, to 4 decimals.`,
+      `A ${tail === "two" ? "two-tailed" : tail + "-tailed"} z test for a population mean gives a test value of $z = ${z}$. The problem asks you to use the P-value method. Using Table E, find the P-value, rounded to 4 decimals.`,
       steps,
       p,
       Math.max(0.00025, round(p * 0.08, 5))
@@ -886,7 +1006,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return N(
       "t-critical",
       "Critical t Value",
-      `Find the POSITIVE critical value for a ${label} t test with $\\alpha = ${alpha}$ and $n = ${n}$. Use Table F and round to 3 decimals.`,
+      `A ${label} t test for a population mean is to be run at $\\alpha = ${alpha}$ on a sample of size $n = ${n}$, with $\\sigma$ unknown and the population approximately normal. Part (b) asks for the critical value(s). Using Table F, find the POSITIVE critical value, rounded to 3 decimals.`,
       [
         `$\\text{d.f.} = n - 1 = ${n} - 1 = ${df}$`,
         `Go to the $\\text{d.f.} = ${df}$ row, then use the '${tails === 1 ? "One tail" : "Two tails"}' header row to find the $${alpha}$ column.`,
@@ -910,7 +1030,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return N(
       "t-testvalue",
       "t Test Value",
-      `The mean ${c.what} for ${c.who} is claimed to be ${mu} ${c.unit}. A sample of $n = ${n}$ gives $\\bar{X} = ${xbar}$ and $s = ${s}$. The population standard deviation is unknown. Compute the test value, to 3 decimals.`,
+      `${c.setup(mu)} To test this, ${c.investigator} chooses ${n} ${c.units} at random and finds a sample mean ${c.what} of ${xbar} ${c.unit}, with a sample standard deviation of ${s} ${c.unit}. The population standard deviation is unknown, and the ${c.measures} are approximately normally distributed. Part (c) asks you to compute the test value. Find the value of the t test statistic, rounded to 3 decimals.`,
       [
         `$\\sigma$ is unknown, so use $t$, not $z$, with $\\text{d.f.} = ${n - 1}$.`,
         `$\\dfrac{s}{\\sqrt{n}} = \\dfrac{${s}}{\\sqrt{${n}}} = ${round(se, 4)}$`,
@@ -953,7 +1073,7 @@ export const ch8Generators: Record<string, () => PracticeProblem> = {
     return C(
       "conclusion",
       "Wording the Conclusion",
-      `A researcher tests the claim that ${claimText}. The claim is in $H_${claimInH1 ? "1" : "0"}$. The test value ${reject ? "falls inside" : "does not fall inside"} the critical region. Write the summary.`,
+      `${c.setup(k)} ${cap1(c.investigator)} tests the claim that ${claimText}, so the claim sits in $H_${claimInH1 ? "1" : "0"}$. The test value ${reject ? "falls inside" : "does not fall inside"} the critical region. Part (e) asks you to summarize the results. Which sentence is correct?`,
       options,
       options.indexOf(correct),
       [
